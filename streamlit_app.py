@@ -29,52 +29,133 @@ PERSON_IDS = [f'Person {i+1}' for i in range(8)]
 VALID_DAYS = ['Mon', 'Tue'] 
 
 # Define the scoring weights
-WEIGHTS = {
-    'Yes': 3,
-    'No': -5,  # Strong negative to act as a near-disqualifier
-    'Dont Care': 0,
-    'Time_Pref': 2,
-    'Time_Avoid': -4
+SLIDER_WEIGHTS = {
+    'Day': 0.6,
+    'Format': 0.7,
+    'Time': 0.5,
 }
 
-# Sentinel for slots that violate hard constraints (e.g., "Definitely NOT" day)
-FORBIDDEN_SCORE = -9999
+CATEGORICAL_WEIGHTS = {
+    'Yes': 3,
+    'No': -5,
+    'Dont Care': 0,
+    'Time_Pref': 2,
+}
 
-# Preference strength heuristic: counts how specific/expressive the user is.
-def preference_strength(prefs):
-    strength = 0
-    # Day preference: anything other than neutral earns strength
-    if prefs.get('Day_Preference') not in ["Don't Care", "Either (Mon or Tue) is fine"]:
-        strength += 1
-    # Format preferences: non-neutral responses add strength
-    for f in ['F2F', 'Teams']:
-        if prefs.get(f) != 'Dont Care':
-            strength += 1
-    # Time preference: anything other than 'Anytime' adds strength
-    if prefs.get('Time') != 'Anytime':
-        strength += 1
-    return strength
+# Normalization targets for report-style outputs
+SLIDER_MAX_SCORE = 100 * (SLIDER_WEIGHTS['Day'] + SLIDER_WEIGHTS['Format'] + SLIDER_WEIGHTS['Time'])
+CATEGORICAL_MIN_SCORE = -5
+CATEGORICAL_MAX_SCORE = 8
 
-# --- TIME CHOICES ---
+# Slot time scaling for 0-100 preference alignment
+MIN_SLOT_TIME = min(slot['Time'] for slot in SLOTS_DATA.values())
+MAX_SLOT_TIME = max(slot['Time'] for slot in SLOTS_DATA.values())
+
+# --- TIME CHOICES (Categorical) ---
 TIME_CHOICES = {
     'Anytime': (0, 2400),
     'Before 10 AM': (0, 1000),
     'Before 1 PM (13:00)': (0, 1300),
     'After 12 PM': (1200, 2400),
-    'After 4 PM (16:00)': (1600, 2400), 
+    'After 4 PM (16:00)': (1600, 2400),
     'Between 10 AM and 4 PM': (1000, 1600),
 }
-
 
 # --- Combined Day Preference Options ---
 DAY_PREF_OPTIONS = [
     'Don\'t Care',
     'Prefer Monday',
     'Prefer Tuesday',
-    'Either (Mon or Tue) is fine', # Neutral/Don't Care, but explicit
+    'Either (Mon or Tue) is fine',
     'Definitely NOT Monday',
     'Definitely NOT Tuesday'
 ]
+
+FORBIDDEN_SCORE = -9999
+
+# Preference strength heuristic: how far from neutral (50) the user is.
+def preference_strength_slider(prefs):
+    strength = 0.0
+    for key in ['Pref_Mon', 'Pref_Tue', 'Pref_F2F', 'Pref_Teams', 'Pref_Time']:
+        strength += abs(prefs.get(key, 50) - 50) / 50
+    return strength
+
+def preference_strength_categorical(prefs):
+    strength = 0
+    if prefs.get('Day_Preference') not in ["Don't Care", "Either (Mon or Tue) is fine"]:
+        strength += 1
+    for f in ['F2F', 'Teams']:
+        if prefs.get(f) != 'Dont Care':
+            strength += 1
+    if prefs.get('Time') != 'Anytime':
+        strength += 1
+    return strength
+
+def slot_time_to_scale(slot_time):
+    if MAX_SLOT_TIME == MIN_SLOT_TIME:
+        return 50
+    return int(round((slot_time - MIN_SLOT_TIME) / (MAX_SLOT_TIME - MIN_SLOT_TIME) * 100))
+
+def time_choice_from_slider(pref_time):
+    best_choice = None
+    best_dist = None
+    for label, (lower, upper) in TIME_CHOICES.items():
+        if label == 'Anytime':
+            midpoint = 50
+        else:
+            midpoint_time = (lower + upper) / 2
+            midpoint = slot_time_to_scale(midpoint_time)
+        dist = abs(pref_time - midpoint)
+        if best_dist is None or dist < best_dist:
+            best_dist = dist
+            best_choice = label
+    return best_choice
+
+def slider_to_categorical(slider_prefs):
+    pref_mon = slider_prefs['Pref_Mon']
+    pref_tue = slider_prefs['Pref_Tue']
+    pref_f2f = slider_prefs['Pref_F2F']
+    pref_teams = slider_prefs['Pref_Teams']
+    pref_time = slider_prefs['Pref_Time']
+
+    if pref_mon <= 20 and pref_tue >= 50:
+        day_pref = 'Definitely NOT Monday'
+    elif pref_tue <= 20 and pref_mon >= 50:
+        day_pref = 'Definitely NOT Tuesday'
+    else:
+        delta = pref_mon - pref_tue
+        if delta >= 20:
+            day_pref = 'Prefer Monday'
+        elif delta <= -20:
+            day_pref = 'Prefer Tuesday'
+        elif abs(delta) <= 10:
+            day_pref = 'Either (Mon or Tue) is fine'
+        else:
+            day_pref = 'Don\'t Care'
+
+    def map_format(score):
+        if score >= 70:
+            return 'Yes'
+        if score <= 30:
+            return 'No'
+        return 'Dont Care'
+
+    return {
+        'Day_Preference': day_pref,
+        'F2F': map_format(pref_f2f),
+        'Teams': map_format(pref_teams),
+        'Time': time_choice_from_slider(pref_time),
+    }
+
+def normalize_slider_score(score):
+    if SLIDER_MAX_SCORE == 0:
+        return 0.0
+    return max(0.0, min(100.0, (score / SLIDER_MAX_SCORE) * 100))
+
+def normalize_categorical_score(score):
+    if CATEGORICAL_MAX_SCORE == CATEGORICAL_MIN_SCORE:
+        return 0.0
+    return max(0.0, min(100.0, ((score - CATEGORICAL_MIN_SCORE) / (CATEGORICAL_MAX_SCORE - CATEGORICAL_MIN_SCORE)) * 100))
 
 
 
@@ -196,59 +277,136 @@ def inject_base_styles():
 
 # --- 3. AGENT LOGIC (SCORING) ---
 
-def calculate_utility_score(slot_id, slot_data, prefs):
-    """Calculates the P-Agent's Utility Score for a specific slot."""
+def calculate_utility_score_slider(slot_id, slot_data, prefs):
+    """Calculates the P-Agent's Utility Score for a specific slot (0-100 sliders)."""
+    slot_day = slot_data['Day']
+    slot_time = slot_data['Time']
+    slot_format = slot_data['Format']
+
+    day_score = prefs['Pref_Mon'] if slot_day == 'Mon' else prefs['Pref_Tue']
+    format_score = prefs['Pref_F2F'] if slot_format == 'F2F' else prefs['Pref_Teams']
+    slot_scaled = slot_time_to_scale(slot_time)
+    time_score = 100 - abs(prefs['Pref_Time'] - slot_scaled)
+
+    score = (
+        day_score * SLIDER_WEIGHTS['Day'] +
+        format_score * SLIDER_WEIGHTS['Format'] +
+        time_score * SLIDER_WEIGHTS['Time']
+    )
+    return score
+
+def calculate_utility_score_categorical(slot_id, slot_data, prefs):
+    """Calculates the P-Agent's Utility Score for a specific slot (categorical)."""
     score = 0
     slot_day = slot_data['Day']
     slot_time = slot_data['Time']
     slot_format = slot_data['Format']
-    
-    # --- Day Preference ---
-    day_pref = prefs['Day_Preference']
 
-    # Hard exclusions: "Definitely NOT" days are treated as forbidden.
+    day_pref = prefs['Day_Preference']
     if day_pref == 'Definitely NOT Monday' and slot_day == 'Mon':
         return FORBIDDEN_SCORE
     if day_pref == 'Definitely NOT Tuesday' and slot_day == 'Tue':
         return FORBIDDEN_SCORE
-    
-    if day_pref == 'Prefer Monday':
-        if slot_day == 'Mon':
-            score += WEIGHTS['Yes'] # +3 for preferred day
-    elif day_pref == 'Prefer Tuesday':
-        if slot_day == 'Tue':
-            score += WEIGHTS['Yes'] # +3 for preferred day
-    elif day_pref == 'Definitely NOT Monday':
-        if slot_day == 'Mon':
-            score += WEIGHTS['No'] # -5 for hard avoid
-    elif day_pref == 'Definitely NOT Tuesday':
-        if slot_day == 'Tue':
-            score += WEIGHTS['No'] # -5 for hard avoid
-    
-    # 'Don\'t Care' and 'Either (Mon or Tue) add 0, as they are neutral.
 
-    # --- Format Preference (F2F and Teams) ---
+    if day_pref == 'Prefer Monday' and slot_day == 'Mon':
+        score += CATEGORICAL_WEIGHTS['Yes']
+    elif day_pref == 'Prefer Tuesday' and slot_day == 'Tue':
+        score += CATEGORICAL_WEIGHTS['Yes']
+    elif day_pref == 'Definitely NOT Monday' and slot_day == 'Mon':
+        score += CATEGORICAL_WEIGHTS['No']
+    elif day_pref == 'Definitely NOT Tuesday' and slot_day == 'Tue':
+        score += CATEGORICAL_WEIGHTS['No']
+
     for f in ['F2F', 'Teams']:
         pref_f = prefs[f]
         if pref_f == 'Yes' and slot_format == f:
-            score += WEIGHTS['Yes']
+            score += CATEGORICAL_WEIGHTS['Yes']
         elif pref_f == 'No' and slot_format == f:
-            score += WEIGHTS['No']
-        # 'Dont Care' adds 0
+            score += CATEGORICAL_WEIGHTS['No']
 
-    # --- Time Preference ---
     time_key = prefs['Time']
     lower, upper = TIME_CHOICES[time_key]
-    
-    # Check if slot time falls within preferred range (positive score)
     if lower <= slot_time < upper and time_key != 'Anytime':
-        score += WEIGHTS['Time_Pref']
-    
+        score += CATEGORICAL_WEIGHTS['Time_Pref']
+
     return score
+
+def satisfaction_from_slider_prefs(slot_id, slider_prefs):
+    slot_data = SLOTS_DATA[slot_id]
+    return calculate_utility_score_slider(slot_id, slot_data, slider_prefs)
+
+def build_results_df(assignments, prefs, mode):
+    results_list = []
+    for person, slot_id in assignments.items():
+        slot_info = SLOTS_DATA[slot_id]
+        if mode == "slider":
+            raw_score = calculate_utility_score_slider(slot_id, slot_info, prefs[person])
+            norm_score = normalize_slider_score(raw_score)
+        else:
+            raw_score = calculate_utility_score_categorical(slot_id, slot_info, prefs[person])
+            norm_score = normalize_categorical_score(raw_score)
+
+        if norm_score >= 80:
+            fit_label = "Strong match"
+        elif norm_score >= 60:
+            fit_label = "Good match"
+        elif norm_score >= 40:
+            fit_label = "Mixed"
+        else:
+            fit_label = "Poor match"
+
+        results_list.append({
+            'Person': person,
+            'Assigned Slot': slot_id,
+            'Slot (Day/Time/Format)': f"{slot_info['Day']} {SLOTS_DF.loc[slot_id, 'Time_Display']} · {slot_info['Format']}",
+            'Utility Score': raw_score,
+            'Satisfaction (0-100)': norm_score,
+            'Fit': fit_label,
+        })
+
+    results_df = pd.DataFrame(results_list)
+    if not results_df.empty:
+        results_df = results_df.sort_values(by='Satisfaction (0-100)', ascending=False).reset_index(drop=True)
+        results_df.insert(0, 'Rank', results_df.index + 1)
+    return results_df
+
+def summarize_results(results_df):
+    if results_df.empty:
+        return {
+            'avg': 0.0,
+            'min': 0.0,
+            'low_pct': 0.0,
+        }
+    avg_score = float(results_df['Satisfaction (0-100)'].mean())
+    min_score = float(results_df['Satisfaction (0-100)'].min())
+    low_pct = float((results_df['Satisfaction (0-100)'] < 50).mean() * 100)
+    return {
+        'avg': avg_score,
+        'min': min_score,
+        'low_pct': low_pct,
+    }
+
+def render_report_section(results_df, unassigned_slots_count, title_suffix):
+    summary = summarize_results(results_df)
+    st.subheader(f"Report Snapshot {title_suffix}")
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Avg Satisfaction", f"{summary['avg']:.1f}")
+    metric_cols[1].metric("Min Satisfaction", f"{summary['min']:.1f}")
+    metric_cols[2].metric("% Below 50", f"{summary['low_pct']:.1f}%")
+    metric_cols[3].metric("Unassigned Slots", f"{unassigned_slots_count}")
+
+    st.markdown(
+        "How to read this: **Satisfaction (0-100)** is normalized for reporting. "
+        "Fit labels are based on that score (80+ strong, 60-79 good, 40-59 mixed, <40 poor)."
+    )
+
+    if not results_df.empty:
+        chart_df = results_df[['Person', 'Satisfaction (0-100)']].set_index('Person')
+        st.bar_chart(chart_df)
 
 # --- 4. MASTER AGENT LOGIC (NEGOTIATION) ---
 
-def master_agent_negotiate(all_person_prefs, render_log=False):
+def master_agent_negotiate(all_person_prefs, scorer, strength_fn, render_log=False):
     """Runs the auction-style assignment process."""
     available_slots = set(SLOT_IDS)
     assigned_slots = {}  # {Person_ID: Slot_ID}
@@ -274,30 +432,15 @@ def master_agent_negotiate(all_person_prefs, render_log=False):
             scores = {}
             for slot_id in available_slots:
                 slot_data = SLOTS_DATA[slot_id]
-                score = calculate_utility_score(slot_id, slot_data, prefs)
+                score = scorer(slot_id, slot_data, prefs)
                 scores[slot_id] = score
             
-            # P-Agent determines its top bid in three tiers:
-            # 1) Any non-negative slots (best effort)
-            positive_slots = {s: sc for s, sc in scores.items() if sc >= 0 and sc > FORBIDDEN_SCORE}
-            # 2) Slightly negative but still acceptable (>-4), never forbidden
-            mild_negative_slots = {s: sc for s, sc in scores.items() if -4 < sc < 0 and sc > FORBIDDEN_SCORE}
-            # 3) Last-resort: best non-forbidden slot, even if negative (keeps the person assignable)
-            fallback_slots = {s: sc for s, sc in scores.items() if sc > FORBIDDEN_SCORE}
-
-            eligible_slots = None
-            if positive_slots:
-                eligible_slots = positive_slots
-            elif mild_negative_slots:
-                eligible_slots = mild_negative_slots
-            elif fallback_slots:
-                eligible_slots = fallback_slots
-
+            eligible_slots = {s: sc for s, sc in scores.items() if sc > FORBIDDEN_SCORE}
             if not eligible_slots:
                 log_messages.append(f"⚠️ **{person_id}** has no eligible slots remaining.")
                 continue
 
-            # Bid on the highest scoring slot; if multiple tie (e.g., all Don't Care),
+            # Bid on the highest scoring slot; if multiple tie (e.g., all 50s),
             # pick randomly among the best to avoid everyone piling onto one slot.
             best_score = max(eligible_slots.values())
             best_candidates = [s for s, sc in eligible_slots.items() if sc == best_score]
@@ -319,13 +462,13 @@ def master_agent_negotiate(all_person_prefs, render_log=False):
                 # Conflict - Assign to the highest utility score; break ties by preference strength, then random
                 def bid_key(bid):
                     sc, pid = bid
-                    return (sc, preference_strength(all_person_prefs[pid]))
+                    return (sc, strength_fn(all_person_prefs[pid]))
                 top_score = max(bids, key=bid_key)[0]
                 top_bids = [b for b in bids if b[0] == top_score]
                 if len(top_bids) > 1:
                     # tie on score; prefer higher strength
-                    top_strength = max(preference_strength(all_person_prefs[b[1]]) for b in top_bids)
-                    strength_bids = [b for b in top_bids if preference_strength(all_person_prefs[b[1]]) == top_strength]
+                    top_strength = max(strength_fn(all_person_prefs[b[1]]) for b in top_bids)
+                    strength_bids = [b for b in top_bids if strength_fn(all_person_prefs[b[1]]) == top_strength]
                     winning_bid = random.choice(strength_bids)
                 else:
                     winning_bid = top_bids[0]
@@ -393,8 +536,19 @@ def main():
     )
     
     # Initialize session state for storing preferences
-    if 'preferences' not in st.session_state:
-        # Set default preferences for demonstration
+    if 'slider_prefs' not in st.session_state:
+        default_prefs = {}
+        for p in PERSON_IDS:
+            default_prefs[p] = {
+                'Pref_Mon': 50,
+                'Pref_Tue': 50,
+                'Pref_F2F': 50,
+                'Pref_Teams': 50,
+                'Pref_Time': 50,
+            }
+        st.session_state.slider_prefs = default_prefs
+
+    if 'categorical_prefs' not in st.session_state:
         default_prefs = {}
         for p in PERSON_IDS:
             default_prefs[p] = {
@@ -403,7 +557,13 @@ def main():
                 'Teams': 'Dont Care',
                 'Time': 'Anytime',
             }
-        st.session_state.preferences = default_prefs
+        st.session_state.categorical_prefs = default_prefs
+
+    input_mode = st.sidebar.radio(
+        "Preference Input Mode",
+        ["Sliders (0-100)", "Hardcoded (Yes/No)", "Both"],
+        index=0
+    )
 
     # Create one form for all 8 people
     with st.form("preference_form"):
@@ -419,93 +579,349 @@ def main():
             with cols[i % 4]:
                 st.markdown(f"#### {person_id}")
                 
-                # Combined Day Preference Input
-                day_pref = st.selectbox(
-                    f"Day Preference",
-                    DAY_PREF_OPTIONS,
-                    index=DAY_PREF_OPTIONS.index(st.session_state.preferences[person_id]['Day_Preference']),
-                    key=get_key(person_id, 'Day_Preference')
-                )
-                
-                # Format Preference
-                f2f = st.radio(
-                    f"Face-to-Face",
-                    ['Dont Care', 'Yes', 'No'],
-                    index=['Dont Care', 'Yes', 'No'].index(st.session_state.preferences[person_id]['F2F']),
-                    key=get_key(person_id, 'F2F')
-                )
-                teams = st.radio(
-                    f"Teams",
-                    ['Dont Care', 'Yes', 'No'],
-                    index=['Dont Care', 'Yes', 'No'].index(st.session_state.preferences[person_id]['Teams']),
-                    key=get_key(person_id, 'Teams')
-                )
+                if input_mode in ["Sliders (0-100)", "Both"]:
+                    st.markdown("**Sliders (0-100)**")
+                    pref_mon = st.slider(
+                        "Prefer Monday",
+                        0,
+                        100,
+                        st.session_state.slider_prefs[person_id]['Pref_Mon'],
+                        key=get_key(person_id, 'Pref_Mon')
+                    )
+                    pref_tue = st.slider(
+                        "Prefer Tuesday",
+                        0,
+                        100,
+                        st.session_state.slider_prefs[person_id]['Pref_Tue'],
+                        key=get_key(person_id, 'Pref_Tue')
+                    )
+                    pref_f2f = st.slider(
+                        "Prefer Face-to-Face",
+                        0,
+                        100,
+                        st.session_state.slider_prefs[person_id]['Pref_F2F'],
+                        key=get_key(person_id, 'Pref_F2F')
+                    )
+                    pref_teams = st.slider(
+                        "Prefer Teams",
+                        0,
+                        100,
+                        st.session_state.slider_prefs[person_id]['Pref_Teams'],
+                        key=get_key(person_id, 'Pref_Teams')
+                    )
+                    pref_time = st.slider(
+                        "Preferred Time of Day (Earlier → Later)",
+                        0,
+                        100,
+                        st.session_state.slider_prefs[person_id]['Pref_Time'],
+                        key=get_key(person_id, 'Pref_Time')
+                    )
+                    st.session_state.slider_prefs[person_id] = {
+                        'Pref_Mon': pref_mon,
+                        'Pref_Tue': pref_tue,
+                        'Pref_F2F': pref_f2f,
+                        'Pref_Teams': pref_teams,
+                        'Pref_Time': pref_time,
+                    }
 
-                # Time Preferences
-                time_pref = st.selectbox(
-                    f"Time of Day",
-                    list(TIME_CHOICES.keys()),
-                    index=list(TIME_CHOICES.keys()).index(st.session_state.preferences[person_id]['Time']),
-                    key=get_key(person_id, 'Time')
-                )
-                
-                # Update session state with form values
-                st.session_state.preferences[person_id] = {
-                    'Day_Preference': day_pref,
-                    'F2F': f2f,
-                    'Teams': teams,
-                    'Time': time_pref,
-                }
+                if input_mode in ["Hardcoded (Yes/No)", "Both"]:
+                    st.markdown("**Hardcoded**")
+                    day_pref = st.selectbox(
+                        f"Day Preference",
+                        DAY_PREF_OPTIONS,
+                        index=DAY_PREF_OPTIONS.index(st.session_state.categorical_prefs[person_id]['Day_Preference']),
+                        key=get_key(person_id, 'Day_Preference')
+                    )
+                    f2f = st.radio(
+                        f"Face-to-Face",
+                        ['Dont Care', 'Yes', 'No'],
+                        index=['Dont Care', 'Yes', 'No'].index(st.session_state.categorical_prefs[person_id]['F2F']),
+                        key=get_key(person_id, 'F2F')
+                    )
+                    teams = st.radio(
+                        f"Teams",
+                        ['Dont Care', 'Yes', 'No'],
+                        index=['Dont Care', 'Yes', 'No'].index(st.session_state.categorical_prefs[person_id]['Teams']),
+                        key=get_key(person_id, 'Teams')
+                    )
+                    time_pref = st.selectbox(
+                        f"Time of Day",
+                        list(TIME_CHOICES.keys()),
+                        index=list(TIME_CHOICES.keys()).index(st.session_state.categorical_prefs[person_id]['Time']),
+                        key=get_key(person_id, 'Time')
+                    )
+                    st.session_state.categorical_prefs[person_id] = {
+                        'Day_Preference': day_pref,
+                        'F2F': f2f,
+                        'Teams': teams,
+                        'Time': time_pref,
+                    }
         
         st.markdown("---")
         submitted = st.form_submit_button("Run Master Agent Negotiation")
 
     if submitted:
         st.sidebar.subheader("Input Review")
-        st.sidebar.dataframe(pd.DataFrame(st.session_state.preferences).T)
+        if input_mode in ["Sliders (0-100)", "Both"]:
+            st.sidebar.markdown("**Sliders**")
+            st.sidebar.dataframe(pd.DataFrame(st.session_state.slider_prefs).T)
+        if input_mode in ["Hardcoded (Yes/No)", "Both"]:
+            st.sidebar.markdown("**Hardcoded**")
+            st.sidebar.dataframe(pd.DataFrame(st.session_state.categorical_prefs).T)
 
-        final_assignments, log_messages = master_agent_negotiate(st.session_state.preferences, render_log=False)
+        results = []
+        if input_mode in ["Sliders (0-100)", "Both"]:
+            final_assignments, log_messages = master_agent_negotiate(
+                st.session_state.slider_prefs,
+                scorer=calculate_utility_score_slider,
+                strength_fn=preference_strength_slider,
+                render_log=False
+            )
+            results.append(("Sliders (0-100)", final_assignments, log_messages, "slider"))
+
+        if input_mode in ["Hardcoded (Yes/No)", "Both"]:
+            final_assignments, log_messages = master_agent_negotiate(
+                st.session_state.categorical_prefs,
+                scorer=calculate_utility_score_categorical,
+                strength_fn=preference_strength_categorical,
+                render_log=False
+            )
+            results.append(("Hardcoded (Yes/No)", final_assignments, log_messages, "categorical"))
         
         st.header("Final Assignment Results")
-        results_tab, log_tab, inputs_tab = st.tabs(["Results", "Negotiation Log", "Inputs Review"])
+        if len(results) > 1:
+            tab_labels = [r[0] for r in results] + ["Inputs Review"]
+            tabs = st.tabs(tab_labels)
+        else:
+            tabs = st.tabs(["Results", "Negotiation Log", "Inputs Review"])
 
-        with results_tab:
-            if final_assignments:
-                results_list = []
-                for person, slot_id in final_assignments.items():
-                    slot_info = SLOTS_DATA[slot_id]
-                    final_score = calculate_utility_score(slot_id, slot_info, st.session_state.preferences[person])
-                    
-                    results_list.append({
-                        'Person': person,
-                        'Assigned Slot': slot_id,
-                        'Day': slot_info['Day'],
-                        'Time': SLOTS_DF.loc[slot_id, 'Time_Display'],
-                        'Format': slot_info['Format'],
-                        'Utility Score': final_score,
-                    })
+        if len(results) > 1:
+            for idx, (label, final_assignments, log_messages, mode) in enumerate(results):
+                with tabs[idx]:
+                    if final_assignments:
+                        if mode == "slider":
+                            results_df = build_results_df(final_assignments, st.session_state.slider_prefs, mode)
+                        else:
+                            results_df = build_results_df(final_assignments, st.session_state.categorical_prefs, mode)
 
-                results_df = pd.DataFrame(results_list)
-                results_df = results_df.sort_values(by='Utility Score', ascending=False).reset_index(drop=True)
-                
-                st.success(f"Successfully assigned **{len(results_df)}** out of 8 people to slots!")
-                st.dataframe(results_df, use_container_width=True)
-                
-                st.markdown("### Unassigned Slots")
-                assigned_slot_ids = set(final_assignments.values())
-                unassigned_slots = SLOTS_DF[~SLOTS_DF.index.isin(assigned_slot_ids)].drop(columns=['Time'])
-                st.dataframe(unassigned_slots, use_container_width=True)
+                        assigned_slot_ids = set(final_assignments.values())
+                        unassigned_slots = SLOTS_DF[~SLOTS_DF.index.isin(assigned_slot_ids)].drop(columns=['Time'])
+
+                        st.success(f"Successfully assigned **{len(results_df)}** out of 8 people to slots!")
+                        render_report_section(results_df, len(unassigned_slots), f"({label})")
+                        st.markdown("### Allocation Details")
+                        st.dataframe(
+                            results_df.style.format({
+                                'Utility Score': '{:.2f}',
+                                'Satisfaction (0-100)': '{:.1f}',
+                            }),
+                            use_container_width=True
+                        )
+
+                        st.markdown("### Unassigned Slots")
+                        st.dataframe(unassigned_slots, use_container_width=True)
+                    else:
+                        st.error("The Master Agent failed to make any assignments.")
+
+                    if log_messages:
+                        st.markdown("### Negotiation Log")
+                        st.code("\n".join(log_messages))
+        else:
+            results_tab, log_tab, inputs_tab = tabs
+            label, final_assignments, log_messages, mode = results[0]
+            with results_tab:
+                if final_assignments:
+                    if mode == "slider":
+                        results_df = build_results_df(final_assignments, st.session_state.slider_prefs, mode)
+                    else:
+                        results_df = build_results_df(final_assignments, st.session_state.categorical_prefs, mode)
+
+                    assigned_slot_ids = set(final_assignments.values())
+                    unassigned_slots = SLOTS_DF[~SLOTS_DF.index.isin(assigned_slot_ids)].drop(columns=['Time'])
+
+                    st.success(f"Successfully assigned **{len(results_df)}** out of 8 people to slots!")
+                    render_report_section(results_df, len(unassigned_slots), "")
+                    st.markdown("### Allocation Details")
+                    st.dataframe(
+                        results_df.style.format({
+                            'Utility Score': '{:.2f}',
+                            'Satisfaction (0-100)': '{:.1f}',
+                        }),
+                        use_container_width=True
+                    )
+
+                    st.markdown("### Unassigned Slots")
+                    st.dataframe(unassigned_slots, use_container_width=True)
+                else:
+                    st.error("The Master Agent failed to make any assignments.")
+
+            with log_tab:
+                if log_messages:
+                    st.code("\n".join(log_messages))
+                else:
+                    st.info("No log messages to display.")
+
+            with inputs_tab:
+                if mode == "slider":
+                    st.dataframe(pd.DataFrame(st.session_state.slider_prefs).T)
+                else:
+                    st.dataframe(pd.DataFrame(st.session_state.categorical_prefs).T)
+
+        if len(results) > 1:
+            with tabs[-1]:
+                if input_mode in ["Sliders (0-100)", "Both"]:
+                    st.markdown("**Sliders**")
+                    st.dataframe(pd.DataFrame(st.session_state.slider_prefs).T)
+                if input_mode in ["Hardcoded (Yes/No)", "Both"]:
+                    st.markdown("**Hardcoded**")
+                    st.dataframe(pd.DataFrame(st.session_state.categorical_prefs).T)
+
+    st.markdown("### Simulation: Sliders vs Hardcoded")
+    st.caption("Runs 50 randomized preference sets using the same underlying preferences for both modes.")
+    if st.button("Run 50x Simulation"):
+        runs = 50
+        threshold = 0.5 * SLIDER_MAX_SCORE
+        sim_rows = []
+        for run_id in range(1, runs + 1):
+            slider_prefs = {}
+            categorical_prefs = {}
+            for p in PERSON_IDS:
+                sp = {
+                    'Pref_Mon': random.randint(0, 100),
+                    'Pref_Tue': random.randint(0, 100),
+                    'Pref_F2F': random.randint(0, 100),
+                    'Pref_Teams': random.randint(0, 100),
+                    'Pref_Time': random.randint(0, 100),
+                }
+                slider_prefs[p] = sp
+                categorical_prefs[p] = slider_to_categorical(sp)
+
+            slider_assignments, _ = master_agent_negotiate(
+                slider_prefs,
+                scorer=calculate_utility_score_slider,
+                strength_fn=preference_strength_slider,
+                render_log=False
+            )
+            cat_assignments, _ = master_agent_negotiate(
+                categorical_prefs,
+                scorer=calculate_utility_score_categorical,
+                strength_fn=preference_strength_categorical,
+                render_log=False
+            )
+
+            def eval_assignments(assignments):
+                scores = []
+                for person, slot_id in assignments.items():
+                    scores.append(satisfaction_from_slider_prefs(slot_id, slider_prefs[person]))
+                avg_score = float(np.mean(scores)) if scores else 0.0
+                min_score = float(np.min(scores)) if scores else 0.0
+                low_pct = float(np.mean([1 if s < threshold else 0 for s in scores])) if scores else 0.0
+                return avg_score, low_pct, min_score
+
+            s_avg, s_low, s_min = eval_assignments(slider_assignments)
+            c_avg, c_low, c_min = eval_assignments(cat_assignments)
+            sim_rows.append({
+                'Run': run_id,
+                'Mode': 'Sliders (0-100)',
+                'Avg Satisfaction': normalize_slider_score(s_avg),
+                '% Below Threshold': s_low * 100,
+                'Min Satisfaction': normalize_slider_score(s_min),
+            })
+            sim_rows.append({
+                'Run': run_id,
+                'Mode': 'Hardcoded (Yes/No)',
+                'Avg Satisfaction': normalize_slider_score(c_avg),
+                '% Below Threshold': c_low * 100,
+                'Min Satisfaction': normalize_slider_score(c_min),
+            })
+
+        sim_df = pd.DataFrame(sim_rows)
+        sim_df = sim_df.round(1)
+        summary = sim_df.groupby('Mode').agg({
+            'Avg Satisfaction': ['mean', 'median', 'std'],
+            '% Below Threshold': ['mean', 'median', 'std'],
+            'Min Satisfaction': ['mean', 'median', 'std'],
+        })
+        summary.columns = [' '.join(col).strip() for col in summary.columns.values]
+        summary = summary.reset_index()
+        summary = summary.round(1)
+
+        st.subheader("Simulation Summary (50 runs)")
+        st.dataframe(summary, use_container_width=True)
+
+        st.download_button(
+            "Download Simulation Results (CSV)",
+            sim_df.to_csv(index=False),
+            file_name="simulation_results.csv",
+            mime="text/csv",
+        )
+
+        st.markdown("### Distribution View")
+        dist_cols = st.columns(3)
+        with dist_cols[0]:
+            st.area_chart(sim_df.pivot(index='Run', columns='Mode', values='Avg Satisfaction'))
+            st.caption("Avg satisfaction per run")
+        with dist_cols[1]:
+            st.area_chart(sim_df.pivot(index='Run', columns='Mode', values='% Below Threshold'))
+            st.caption("% below threshold per run")
+        with dist_cols[2]:
+            st.area_chart(sim_df.pivot(index='Run', columns='Mode', values='Min Satisfaction'))
+            st.caption("Min satisfaction per run")
+
+        st.markdown("### Distribution Tables (by method)")
+        def dist_stats(series):
+            return pd.Series({
+                'min': series.min(),
+                'p25': series.quantile(0.25),
+                'median': series.median(),
+                'p75': series.quantile(0.75),
+                'max': series.max(),
+            })
+
+        dist_tables = sim_df.groupby('Mode').apply(
+            lambda g: pd.concat([
+                dist_stats(g['Avg Satisfaction']).add_prefix('Avg Satisfaction '),
+                dist_stats(g['% Below Threshold']).add_prefix('% Below Threshold '),
+                dist_stats(g['Min Satisfaction']).add_prefix('Min Satisfaction '),
+            ])
+        ).reset_index()
+        dist_tables = dist_tables.round(1)
+        method_cols = st.columns(2)
+        slider_table = dist_tables[dist_tables['Mode'] == 'Sliders (0-100)']
+        hard_table = dist_tables[dist_tables['Mode'] == 'Hardcoded (Yes/No)']
+        with method_cols[0]:
+            st.markdown("**Sliders (0-100)**")
+            st.dataframe(slider_table, use_container_width=True)
+        with method_cols[1]:
+            st.markdown("**Hardcoded (Yes/No)**")
+            st.dataframe(hard_table, use_container_width=True)
+
+        st.markdown("### Best vs Worst Runs (Avg Satisfaction)")
+        best_runs = sim_df.sort_values('Avg Satisfaction', ascending=False).groupby('Mode').head(3)
+        worst_runs = sim_df.sort_values('Avg Satisfaction', ascending=True).groupby('Mode').head(3)
+        bw_cols = st.columns(2)
+        with bw_cols[0]:
+            st.markdown("**Top 3 runs**")
+            st.dataframe(best_runs.reset_index(drop=True), use_container_width=True)
+        with bw_cols[1]:
+            st.markdown("**Bottom 3 runs**")
+            st.dataframe(worst_runs.reset_index(drop=True), use_container_width=True)
+
+        if len(summary) == 2:
+            slider_row = summary[summary['Mode'] == 'Sliders (0-100)'].iloc[0]
+            hard_row = summary[summary['Mode'] == 'Hardcoded (Yes/No)'].iloc[0]
+            winner_notes = []
+            if slider_row['Avg Satisfaction mean'] > hard_row['Avg Satisfaction mean']:
+                winner_notes.append("higher average satisfaction")
+            if slider_row['% Below Threshold mean'] < hard_row['% Below Threshold mean']:
+                winner_notes.append("fewer low-satisfaction assignments")
+            if slider_row['Min Satisfaction mean'] > hard_row['Min Satisfaction mean']:
+                winner_notes.append("better worst-case satisfaction")
+
+            if winner_notes:
+                st.success("Sliders win on: " + ", ".join(winner_notes) + ".")
             else:
-                st.error("The Master Agent failed to make any assignments.")
-
-        with log_tab:
-            if log_messages:
-                st.code("\n".join(log_messages))
-            else:
-                st.info("No log messages to display.")
-
-        with inputs_tab:
-            st.dataframe(pd.DataFrame(st.session_state.preferences).T)
+                st.info("No clear winner across the three metrics.")
 
 
 if __name__ == "__main__":

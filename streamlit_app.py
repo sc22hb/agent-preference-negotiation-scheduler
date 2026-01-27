@@ -406,8 +406,10 @@ def render_report_section(results_df, unassigned_slots_count, title_suffix):
 
 # --- 4. MASTER AGENT LOGIC (NEGOTIATION) ---
 
-def master_agent_negotiate(all_person_prefs, scorer, strength_fn, render_log=False):
+def master_agent_negotiate(all_person_prefs, scorer, strength_fn, render_log=False, person_ids=None):
     """Runs the auction-style assignment process."""
+    if person_ids is None:
+        person_ids = PERSON_IDS
     available_slots = set(SLOT_IDS)
     assigned_slots = {}  # {Person_ID: Slot_ID}
     
@@ -415,14 +417,14 @@ def master_agent_negotiate(all_person_prefs, scorer, strength_fn, render_log=Fal
     
     # Run a maximum of 5 rounds (or until all 8 people are assigned)
     for round_num in range(1, 6):
-        if len(assigned_slots) == len(PERSON_IDS):
-            log_messages.append(f"✅ All {len(PERSON_IDS)} people assigned! Negotiation complete.")
+        if len(assigned_slots) == len(person_ids):
+            log_messages.append(f"✅ All {len(person_ids)} people assigned! Negotiation complete.")
             break
 
         if render_log:
             st.subheader(f"Round {round_num}")
         round_bids = defaultdict(list) # {Slot_ID: [(score, Person_ID)]}
-        unassigned_people = [p for p in PERSON_IDS if p not in assigned_slots]
+        unassigned_people = [p for p in person_ids if p not in assigned_slots]
         
         # 1. Collect Bids from P-Agents
         for person_id in unassigned_people:
@@ -499,6 +501,56 @@ def master_agent_negotiate(all_person_prefs, scorer, strength_fn, render_log=Fal
         st.text("\n".join(log_messages))
     return assigned_slots, log_messages
 
+def simulate_other_bookings_random(scorer, strength_fn, target_person, num_other_bookings, mode_label):
+    """Simulate other agents booking slots before the target user using random prefs."""
+    other_people = [p for p in PERSON_IDS if p != target_person]
+    if num_other_bookings > len(other_people):
+        num_other_bookings = len(other_people)
+    selected_others = random.sample(other_people, num_other_bookings)
+
+    if mode_label == "slider":
+        other_prefs = {
+            p: {
+                'Pref_Mon': random.randint(0, 100),
+                'Pref_Tue': random.randint(0, 100),
+                'Pref_F2F': random.randint(0, 100),
+                'Pref_Teams': random.randint(0, 100),
+                'Pref_Time': random.randint(0, 100),
+            }
+            for p in selected_others
+        }
+    else:
+        other_prefs = {}
+        for p in selected_others:
+            sp = {
+                'Pref_Mon': random.randint(0, 100),
+                'Pref_Tue': random.randint(0, 100),
+                'Pref_F2F': random.randint(0, 100),
+                'Pref_Teams': random.randint(0, 100),
+                'Pref_Time': random.randint(0, 100),
+            }
+            other_prefs[p] = slider_to_categorical(sp)
+
+    other_assignments, _ = master_agent_negotiate(
+        other_prefs,
+        scorer=scorer,
+        strength_fn=strength_fn,
+        render_log=False,
+        person_ids=selected_others
+    )
+    occupied_slots = set(other_assignments.values())
+    return other_assignments, occupied_slots, selected_others
+
+def assign_single_user(prefs, target_person, occupied_slots, scorer):
+    """Assign best available slot to a single user."""
+    available_slots = [s for s in SLOT_IDS if s not in occupied_slots]
+    if not available_slots:
+        return None
+    scores = {s: scorer(s, SLOTS_DATA[s], prefs[target_person]) for s in available_slots}
+    best_score = max(scores.values())
+    best_candidates = [s for s, sc in scores.items() if sc == best_score]
+    return random.choice(best_candidates)
+
 # --- 5. STREAMLIT APP INTERFACE ---
 
 def main():
@@ -534,6 +586,11 @@ def main():
         "Define how each person feels about **day**, **format** and **time of day**. "
         "When you are ready, run the negotiation to generate assignments.",
     )
+    app_mode = st.sidebar.radio(
+        "App Mode",
+        ["Multi-user negotiation", "Single-user booking (simulate others)"],
+        index=0
+    )
     
     # Initialize session state for storing preferences
     if 'slider_prefs' not in st.session_state:
@@ -565,6 +622,12 @@ def main():
         index=0
     )
 
+    target_person = None
+    other_bookings = 0
+    if app_mode == "Single-user booking (simulate others)":
+        target_person = st.sidebar.selectbox("Target user", PERSON_IDS, index=0)
+        other_bookings = st.sidebar.slider("Number of other bookings to simulate", 0, len(PERSON_IDS) - 1, 5)
+
     # Create one form for all 8 people
     with st.form("preference_form"):
         st.markdown("### Set Preferences for Each Person")
@@ -575,7 +638,8 @@ def main():
         def get_key(person, attr):
             return f"{person}_{attr}"
 
-        for i, person_id in enumerate(PERSON_IDS):
+        people_to_render = PERSON_IDS if app_mode == "Multi-user negotiation" else [target_person]
+        for i, person_id in enumerate(people_to_render):
             with cols[i % 4]:
                 st.markdown(f"#### {person_id}")
                 
@@ -664,29 +728,82 @@ def main():
         st.sidebar.subheader("Input Review")
         if input_mode in ["Sliders (0-100)", "Both"]:
             st.sidebar.markdown("**Sliders**")
-            st.sidebar.dataframe(pd.DataFrame(st.session_state.slider_prefs).T)
+            slider_view = (
+                pd.DataFrame(st.session_state.slider_prefs).T
+                if app_mode == "Multi-user negotiation"
+                else pd.DataFrame({target_person: st.session_state.slider_prefs[target_person]}).T
+            )
+            st.sidebar.dataframe(slider_view)
         if input_mode in ["Hardcoded (Yes/No)", "Both"]:
             st.sidebar.markdown("**Hardcoded**")
-            st.sidebar.dataframe(pd.DataFrame(st.session_state.categorical_prefs).T)
+            cat_view = (
+                pd.DataFrame(st.session_state.categorical_prefs).T
+                if app_mode == "Multi-user negotiation"
+                else pd.DataFrame({target_person: st.session_state.categorical_prefs[target_person]}).T
+            )
+            st.sidebar.dataframe(cat_view)
 
         results = []
-        if input_mode in ["Sliders (0-100)", "Both"]:
-            final_assignments, log_messages = master_agent_negotiate(
-                st.session_state.slider_prefs,
-                scorer=calculate_utility_score_slider,
-                strength_fn=preference_strength_slider,
-                render_log=False
-            )
-            results.append(("Sliders (0-100)", final_assignments, log_messages, "slider"))
+        if app_mode == "Multi-user negotiation":
+            if input_mode in ["Sliders (0-100)", "Both"]:
+                final_assignments, log_messages = master_agent_negotiate(
+                    st.session_state.slider_prefs,
+                    scorer=calculate_utility_score_slider,
+                    strength_fn=preference_strength_slider,
+                    render_log=False
+                )
+                results.append(("Sliders (0-100)", final_assignments, log_messages, "slider", None))
 
-        if input_mode in ["Hardcoded (Yes/No)", "Both"]:
-            final_assignments, log_messages = master_agent_negotiate(
-                st.session_state.categorical_prefs,
-                scorer=calculate_utility_score_categorical,
-                strength_fn=preference_strength_categorical,
-                render_log=False
-            )
-            results.append(("Hardcoded (Yes/No)", final_assignments, log_messages, "categorical"))
+            if input_mode in ["Hardcoded (Yes/No)", "Both"]:
+                final_assignments, log_messages = master_agent_negotiate(
+                    st.session_state.categorical_prefs,
+                    scorer=calculate_utility_score_categorical,
+                    strength_fn=preference_strength_categorical,
+                    render_log=False
+                )
+                results.append(("Hardcoded (Yes/No)", final_assignments, log_messages, "categorical", None))
+        else:
+            if input_mode in ["Sliders (0-100)", "Both"]:
+                other_assignments, occupied_slots, selected_others = simulate_other_bookings_random(
+                    scorer=calculate_utility_score_slider,
+                    strength_fn=preference_strength_slider,
+                    target_person=target_person,
+                    num_other_bookings=other_bookings,
+                    mode_label="slider"
+                )
+                assigned_slot = assign_single_user(
+                    st.session_state.slider_prefs,
+                    target_person,
+                    occupied_slots,
+                    scorer=calculate_utility_score_slider
+                )
+                final_assignments = {target_person: assigned_slot} if assigned_slot else {}
+                log_messages = [
+                    f"Simulated other bookings: {', '.join(selected_others) if selected_others else 'none'} (random prefs).",
+                    f"Occupied slots (before target): {', '.join(sorted(occupied_slots)) if occupied_slots else 'none'}.",
+                ]
+                results.append(("Sliders (0-100)", final_assignments, log_messages, "slider", occupied_slots))
+
+            if input_mode in ["Hardcoded (Yes/No)", "Both"]:
+                other_assignments, occupied_slots, selected_others = simulate_other_bookings_random(
+                    scorer=calculate_utility_score_categorical,
+                    strength_fn=preference_strength_categorical,
+                    target_person=target_person,
+                    num_other_bookings=other_bookings,
+                    mode_label="categorical"
+                )
+                assigned_slot = assign_single_user(
+                    st.session_state.categorical_prefs,
+                    target_person,
+                    occupied_slots,
+                    scorer=calculate_utility_score_categorical
+                )
+                final_assignments = {target_person: assigned_slot} if assigned_slot else {}
+                log_messages = [
+                    f"Simulated other bookings: {', '.join(selected_others) if selected_others else 'none'} (random prefs).",
+                    f"Occupied slots (before target): {', '.join(sorted(occupied_slots)) if occupied_slots else 'none'}.",
+                ]
+                results.append(("Hardcoded (Yes/No)", final_assignments, log_messages, "categorical", occupied_slots))
         
         st.header("Final Assignment Results")
         if len(results) > 1:
@@ -696,7 +813,7 @@ def main():
             tabs = st.tabs(["Results", "Negotiation Log", "Inputs Review"])
 
         if len(results) > 1:
-            for idx, (label, final_assignments, log_messages, mode) in enumerate(results):
+            for idx, (label, final_assignments, log_messages, mode, occupied_slots) in enumerate(results):
                 with tabs[idx]:
                     if final_assignments:
                         if mode == "slider":
@@ -705,9 +822,14 @@ def main():
                             results_df = build_results_df(final_assignments, st.session_state.categorical_prefs, mode)
 
                         assigned_slot_ids = set(final_assignments.values())
-                        unassigned_slots = SLOTS_DF[~SLOTS_DF.index.isin(assigned_slot_ids)].drop(columns=['Time'])
+                        blocked_slots = occupied_slots if occupied_slots else set()
+                        unavailable = assigned_slot_ids.union(blocked_slots)
+                        unassigned_slots = SLOTS_DF[~SLOTS_DF.index.isin(unavailable)].drop(columns=['Time'])
 
-                        st.success(f"Successfully assigned **{len(results_df)}** out of 8 people to slots!")
+                        if app_mode == "Single-user booking (simulate others)":
+                            st.success("Successfully assigned **1** user to a slot.")
+                        else:
+                            st.success(f"Successfully assigned **{len(results_df)}** out of 8 people to slots!")
                         render_report_section(results_df, len(unassigned_slots), f"({label})")
                         st.markdown("### Allocation Details")
                         st.dataframe(
@@ -718,6 +840,11 @@ def main():
                             use_container_width=True
                         )
 
+                        if app_mode == "Single-user booking (simulate others)" and occupied_slots:
+                            st.markdown("### Pre-booked Slots (Simulated Others)")
+                            occupied_df = SLOTS_DF[SLOTS_DF.index.isin(occupied_slots)].drop(columns=['Time'])
+                            st.dataframe(occupied_df, use_container_width=True)
+
                         st.markdown("### Unassigned Slots")
                         st.dataframe(unassigned_slots, use_container_width=True)
                     else:
@@ -726,9 +853,11 @@ def main():
                     if log_messages:
                         st.markdown("### Negotiation Log")
                         st.code("\n".join(log_messages))
+                    if app_mode == "Single-user booking (simulate others)":
+                        st.info("Multi-agent simulation: other users book first, then the target user gets the best remaining slot.")
         else:
             results_tab, log_tab, inputs_tab = tabs
-            label, final_assignments, log_messages, mode = results[0]
+            label, final_assignments, log_messages, mode, occupied_slots = results[0]
             with results_tab:
                 if final_assignments:
                     if mode == "slider":
@@ -737,9 +866,14 @@ def main():
                         results_df = build_results_df(final_assignments, st.session_state.categorical_prefs, mode)
 
                     assigned_slot_ids = set(final_assignments.values())
-                    unassigned_slots = SLOTS_DF[~SLOTS_DF.index.isin(assigned_slot_ids)].drop(columns=['Time'])
+                    blocked_slots = occupied_slots if occupied_slots else set()
+                    unavailable = assigned_slot_ids.union(blocked_slots)
+                    unassigned_slots = SLOTS_DF[~SLOTS_DF.index.isin(unavailable)].drop(columns=['Time'])
 
-                    st.success(f"Successfully assigned **{len(results_df)}** out of 8 people to slots!")
+                    if app_mode == "Single-user booking (simulate others)":
+                        st.success("Successfully assigned **1** user to a slot.")
+                    else:
+                        st.success(f"Successfully assigned **{len(results_df)}** out of 8 people to slots!")
                     render_report_section(results_df, len(unassigned_slots), "")
                     st.markdown("### Allocation Details")
                     st.dataframe(
@@ -749,6 +883,11 @@ def main():
                         }),
                         use_container_width=True
                     )
+
+                    if app_mode == "Single-user booking (simulate others)" and occupied_slots:
+                        st.markdown("### Pre-booked Slots (Simulated Others)")
+                        occupied_df = SLOTS_DF[SLOTS_DF.index.isin(occupied_slots)].drop(columns=['Time'])
+                        st.dataframe(occupied_df, use_container_width=True)
 
                     st.markdown("### Unassigned Slots")
                     st.dataframe(unassigned_slots, use_container_width=True)
@@ -760,6 +899,8 @@ def main():
                     st.code("\n".join(log_messages))
                 else:
                     st.info("No log messages to display.")
+                if app_mode == "Single-user booking (simulate others)":
+                    st.info("Multi-agent simulation: other users book first, then the target user gets the best remaining slot.")
 
             with inputs_tab:
                 if mode == "slider":

@@ -2,5 +2,6 @@ project.txt
 progress_log.txt
 implementation.txt
 lit.txt
-ZAMAN25-FINAL.pdf
+zaman.pdf
 report.txt
+*.pyc

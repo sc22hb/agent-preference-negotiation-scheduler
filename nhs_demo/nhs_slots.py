@@ -6,7 +6,7 @@ from typing import List
 from .models import ApptMode, ApptType, ClinicianRole, Slot
 
 
-BASE_DATE = datetime(2026, 2, 3, 9, 0)
+BASE_DATE = datetime(2026, 2, 2, 9, 0)
 
 
 def _slot(

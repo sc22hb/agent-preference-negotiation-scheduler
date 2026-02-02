@@ -13,6 +13,10 @@ ESCALATION_KEYWORDS = [
     "stroke",
     "unconscious",
     "heart attack",
+    "severe allergic reaction",
+    "anaphylaxis",
+    "seizure",
+    "fainting",
 ]
 
 
@@ -37,7 +41,22 @@ def triage_request(free_text_reason: str) -> Tuple[UrgencyBand, ApptType, Option
     if "rash" in text and ("long-standing" in text or "longstanding" in text):
         return "ROUTINE", "ROUTINE", "GP"
 
-    if "test" in text or "blood" in text:
+    if "urinary" in text or "uti" in text or "urine infection" in text:
+        return "SOON", "URGENT", "GP"
+
+    if "fever" in text and ("child" in text or "baby" in text):
+        return "SOON", "URGENT", "GP"
+
+    if "cough" in text and ("persistent" in text or "2 weeks" in text):
+        return "SOON", "REVIEW", "GP"
+
+    if "sore throat" in text:
+        return "SOON", "ROUTINE", "GP"
+
+    if "back pain" in text or "knee pain" in text or "joint pain" in text:
+        return "ROUTINE", "REVIEW", "GP"
+
+    if "blood" in text or "test" in text or "blood test" in text:
         return "ROUTINE", "TEST", "NURSE"
 
     # Default fallback for general cases

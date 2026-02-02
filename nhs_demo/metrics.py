@@ -30,9 +30,15 @@ def compute_average_utility(
     if not assignments:
         return 0.0
     scores: List[int] = []
+    if slot_map:
+        min_start = min(s.start_time for s in slot_map.values())
+        max_start = max(s.start_time for s in slot_map.values())
+    else:
+        min_start = None
+        max_start = None
     for req_id, slot_id in assignments.items():
         slot = slot_map[slot_id]
-        score, _ = score_slot(slot, requests[req_id])
+        score, _ = score_slot(slot, requests[req_id], min_start=min_start, max_start=max_start)
         scores.append(score)
     return sum(scores) / len(scores)
 
@@ -45,9 +51,15 @@ def compute_fairness_variance(
     if not assignments:
         return 0.0
     scores: List[int] = []
+    if slot_map:
+        min_start = min(s.start_time for s in slot_map.values())
+        max_start = max(s.start_time for s in slot_map.values())
+    else:
+        min_start = None
+        max_start = None
     for req_id, slot_id in assignments.items():
         slot = slot_map[slot_id]
-        score, _ = score_slot(slot, requests[req_id])
+        score, _ = score_slot(slot, requests[req_id], min_start=min_start, max_start=max_start)
         scores.append(score)
     mean = sum(scores) / len(scores)
     return sum((s - mean) ** 2 for s in scores) / len(scores)

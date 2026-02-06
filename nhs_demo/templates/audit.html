@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Audit {{ run_id }}</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="page-header">
+    <h1>Audit Log: {{ run_id }}</h1>
+    <p>Deterministic trace of the multi-agent decision process.</p>
+  </header>
+
+  <main class="layout single-column">
+    <section class="card">
+      <h2>Run Summary</h2>
+      <p><strong>Status:</strong> {{ audit.status }}</p>
+      <p><strong>Created:</strong> {{ audit.created_at }}</p>
+      <p><strong>Updated:</strong> {{ audit.updated_at }}</p>
+      <div class="agent-strip">
+        <span class="agent-chip">SafetyGateAgent</span>
+        <span class="agent-chip">ReceptionistAgent</span>
+        <span class="agent-chip">TriageRoutingAgent</span>
+        <span class="agent-chip">RotaAgent</span>
+        <span class="agent-chip">PatientAgent</span>
+        <span class="agent-chip">MasterAllocatorAgent</span>
+      </div>
+      {% if audit.failure_reason %}
+      <p><strong>Failure reason:</strong> {{ audit.failure_reason }}</p>
+      {% endif %}
+      <div class="actions">
+        <a class="button-link" href="/api/run/{{ run_id }}/audit">Download JSON</a>
+        <a class="button-link" href="/">Back to Demo</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Agent: SafetyGateAgent</h2>
+      <pre>{{ audit.safety | tojson(indent=2) }}</pre>
+    </section>
+
+    <section class="card">
+      <h2>Agent: ReceptionistAgent (Intake)</h2>
+      <details open>
+        <summary>Intake Summary</summary>
+        <pre>{{ audit.intake_summary | tojson(indent=2) }}</pre>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>Agent: TriageRoutingAgent (Routing)</h2>
+      <details open>
+        <summary>Routing Decision</summary>
+        <pre>{{ audit.routing_decision | tojson(indent=2) }}</pre>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>Scheduling Rounds</h2>
+      {% for round in audit.round_audits %}
+      <details open>
+        <summary>Round {{ round.round_number }} (Rota candidates={{ round.candidate_count }}, feasible={{ round.feasible_count }})</summary>
+
+        <h3>Agent: RotaAgent + PatientAgent + MasterAllocatorAgent</h3>
+        <div class="table-wrap">
+          <table class="audit-table">
+            <thead>
+              <tr>
+                <th>Slot ID</th>
+                <th>Start Time</th>
+                <th>Modality</th>
+                <th>Clinician</th>
+                <th>Feasible</th>
+                <th>Utility Score</th>
+                <th>Score Breakdown</th>
+                <th>Veto Reasons</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for eval in round.candidate_evaluations %}
+              <tr>
+                <td>{{ eval.slot.slot_id }}</td>
+                <td>{{ eval.slot.start_time }}</td>
+                <td>{{ eval.slot.modality }}</td>
+                <td>{{ eval.slot.service_type }} ({{ eval.slot.clinician_id }})</td>
+                <td>{{ "yes" if eval.feasible else "no" }}</td>
+                <td>{{ eval.utility if eval.utility is not none else "n/a" }}</td>
+                <td>
+                  {% if eval.breakdown %}
+                  <code>{{ eval.breakdown | tojson }}</code>
+                  {% else %}
+                  n/a
+                  {% endif %}
+                </td>
+                <td>
+                  {% if eval.veto_reasons %}
+                  {{ eval.veto_reasons | join(", ") }}
+                  {% else %}
+                  none
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Agent: MasterAllocatorAgent Decision</h3>
+        <p><strong>Selected slot:</strong> {{ round.selected_slot_id or "none" }}</p>
+        <p><strong>Tie-break policy:</strong> {{ round.tie_break_reason or "n/a" }}</p>
+        <p><strong>Relaxation offered:</strong> {{ round.relaxation_offered | join(", ") if round.relaxation_offered else "none" }}</p>
+
+        <details>
+          <summary>Blocker Summary</summary>
+          <pre>{{ round.blocker_summary | tojson(indent=2) }}</pre>
+        </details>
+      </details>
+      {% endfor %}
+      {% if not audit.round_audits %}
+      <p>No scheduling rounds recorded.</p>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>Relaxation History</h2>
+      {% if audit.relaxation_history %}
+      <ul>
+        {% for item in audit.relaxation_history %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p>No relaxations were applied.</p>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

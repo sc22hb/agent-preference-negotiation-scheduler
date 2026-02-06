@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NHS-Style MAS Scheduling Demo</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="page-header">
+    <h1>NHS-Style Multi-Agent Scheduling Demo</h1>
+    <p>Synthetic data only. Technical demonstrator.</p>
+  </header>
+
+  <main class="chat-layout">
+    <section class="chat-card">
+      <div id="chatThread" class="chat-thread"></div>
+
+      <div class="composer">
+        <div class="row">
+          <label for="captureMode">Interface</label>
+          <select id="captureMode">
+            <option value="conversation" selected>Conversational</option>
+            <option value="form">Form-based</option>
+          </select>
+        </div>
+
+        <div id="conversationInputs">
+          <label for="userText">Your message</label>
+          <textarea id="userText" rows="4" placeholder="Example: persistent cough for 2 weeks, no Monday mornings, phone preferred"></textarea>
+        </div>
+
+        <div id="formInputs" style="display:none;">
+          <label for="formReasonCode">Reason</label>
+          <select id="formReasonCode">
+            <option value="repeat_prescription">Repeat prescription</option>
+            <option value="blood_test">Blood test</option>
+            <option value="persistent_cough">Persistent cough</option>
+            <option value="uti_symptoms">UTI symptoms</option>
+            <option value="sore_throat">Sore throat</option>
+            <option value="admin_request">Admin request</option>
+            <option value="general_review">General review</option>
+          </select>
+
+          <div class="row">
+            <label for="formPreferredModality">Preferred modality</label>
+            <select id="formPreferredModality">
+              <option value="">No preference</option>
+              <option value="in_person">In person</option>
+              <option value="phone">Phone</option>
+              <option value="video">Video</option>
+            </select>
+          </div>
+
+          <fieldset>
+            <legend>Preferred days (soft preference)</legend>
+            <div class="checkbox-grid">
+              <label class="checkbox-item"><input type="checkbox" name="formPreferredDays" value="Mon" />Mon</label>
+              <label class="checkbox-item"><input type="checkbox" name="formPreferredDays" value="Tue" />Tue</label>
+              <label class="checkbox-item"><input type="checkbox" name="formPreferredDays" value="Wed" />Wed</label>
+              <label class="checkbox-item"><input type="checkbox" name="formPreferredDays" value="Thu" />Thu</label>
+              <label class="checkbox-item"><input type="checkbox" name="formPreferredDays" value="Fri" />Fri</label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Hard constraints: days you cannot do</legend>
+            <div class="checkbox-grid">
+              <label class="checkbox-item"><input type="checkbox" name="formExcludedDays" value="Mon" />Mon</label>
+              <label class="checkbox-item"><input type="checkbox" name="formExcludedDays" value="Tue" />Tue</label>
+              <label class="checkbox-item"><input type="checkbox" name="formExcludedDays" value="Wed" />Wed</label>
+              <label class="checkbox-item"><input type="checkbox" name="formExcludedDays" value="Thu" />Thu</label>
+              <label class="checkbox-item"><input type="checkbox" name="formExcludedDays" value="Fri" />Fri</label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Preferred periods (soft preference)</legend>
+            <div class="checkbox-grid">
+              <label class="checkbox-item"><input type="checkbox" name="formPreferredPeriods" value="morning" />Morning</label>
+              <label class="checkbox-item"><input type="checkbox" name="formPreferredPeriods" value="afternoon" />Afternoon</label>
+              <label class="checkbox-item"><input type="checkbox" name="formPreferredPeriods" value="evening" />Evening</label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Hard constraints: periods you cannot do</legend>
+            <div class="checkbox-grid">
+              <label class="checkbox-item"><input type="checkbox" name="formExcludedPeriods" value="morning" />Morning</label>
+              <label class="checkbox-item"><input type="checkbox" name="formExcludedPeriods" value="afternoon" />Afternoon</label>
+              <label class="checkbox-item"><input type="checkbox" name="formExcludedPeriods" value="evening" />Evening</label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Scoring importance profile (0-200)</legend>
+            <div class="row">
+              <label for="formWeightModality">Modality importance</label>
+              <input id="formWeightModality" type="number" min="0" max="200" value="100" />
+              <label for="formWeightDay">Day importance</label>
+              <input id="formWeightDay" type="number" min="0" max="200" value="100" />
+            </div>
+            <div class="row">
+              <label for="formWeightPeriod">Period importance</label>
+              <input id="formWeightPeriod" type="number" min="0" max="200" value="100" />
+              <label for="formWeightSynergy">Day+period synergy importance</label>
+              <input id="formWeightSynergy" type="number" min="0" max="200" value="100" />
+            </div>
+          </fieldset>
+
+          <div class="row">
+            <label for="formHorizon">Date horizon</label>
+            <input id="formHorizon" type="number" min="1" max="30" value="10" />
+
+            <label for="formSoonestWeight">Soonest weight</label>
+            <input id="formSoonestWeight" type="number" min="0" max="100" value="60" />
+          </div>
+          <p class="hint">Soonest weight controls urgency in scoring: 0 ignores soonness, 100 strongly prefers earliest slots.</p>
+          <p class="hint">If you set both preferred days and preferred periods, the scorer adds an extra day+period synergy bonus.</p>
+
+        </div>
+
+        <div class="actions">
+          <button id="btnIntake">Submit Intake</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side-card">
+      <h2>Admin Panel</h2>
+      <p id="runIdView">Run ID: not started</p>
+      <div class="actions">
+        <a id="auditPageLink" class="button-link disabled" href="#">Open Audit Page</a>
+        <a id="auditJsonLink" class="button-link disabled" href="#">Download Audit JSON</a>
+      </div>
+      <h3>State</h3>
+      <pre id="stateSummary">No run yet.</pre>
+      <h3>Intake</h3>
+      <pre id="adminIntake">No intake response yet.</pre>
+      <h3>Route</h3>
+      <pre id="adminRoute">No route response yet.</pre>
+      <h3>Scheduling</h3>
+      <pre id="adminScheduling">No scheduling responses yet.</pre>
+      <h3>Slot Scores (Latest Round)</h3>
+      <pre id="adminSlotScores">No slot scoring yet.</pre>
+      <h3>Relaxation Trail</h3>
+      <pre id="adminRelaxTrail">No relaxations yet.</pre>
+    </aside>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

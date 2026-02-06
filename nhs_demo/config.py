@@ -19,11 +19,20 @@ UTILITY_WEIGHTS: Dict[str, int] = {
     "preferred_modality": 30,
     "preferred_day": 20,
     "preferred_period": 18,
+    "preferred_day_period": 14,
+    "adjacent_preferred_day": 6,
     "soonest": 20,
+}
+
+MISMATCH_PENALTIES: Dict[str, float] = {
+    "modality": 0.35,
+    "day": 0.30,
+    "period": 0.28,
 }
 
 BLOCKER_SEVERITY: Dict[str, int] = {
     "modality_not_allowed": 5,
+    "excluded_day_period": 5,
     "excluded_modality": 4,
     "excluded_day": 3,
     "excluded_period": 3,

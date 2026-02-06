@@ -36,6 +36,18 @@ class FlexibilityOptions(BaseModel):
     allow_date_horizon_relax: bool = True
 
 
+class DayPeriodPreference(BaseModel):
+    day: Weekday
+    period: Period
+
+
+class PreferenceWeightProfile(BaseModel):
+    modality: int = Field(default=100, ge=0, le=200)
+    day: int = Field(default=100, ge=0, le=200)
+    period: int = Field(default=100, ge=0, le=200)
+    day_period_synergy: int = Field(default=100, ge=0, le=200)
+
+
 class PatientPreferences(BaseModel):
     preferred_modalities: List[Modality] = Field(default_factory=list)
     excluded_modalities: List[Modality] = Field(default_factory=list)
@@ -43,8 +55,11 @@ class PatientPreferences(BaseModel):
     excluded_days: List[Weekday] = Field(default_factory=list)
     preferred_periods: List[Period] = Field(default_factory=list)
     excluded_periods: List[Period] = Field(default_factory=list)
+    preferred_day_periods: List[DayPeriodPreference] = Field(default_factory=list)
+    excluded_day_periods: List[DayPeriodPreference] = Field(default_factory=list)
     date_horizon_days: int = Field(default=10, ge=1, le=30)
     soonest_weight: int = Field(default=60, ge=0, le=100)
+    weight_profile: PreferenceWeightProfile = Field(default_factory=PreferenceWeightProfile)
     flexibility: FlexibilityOptions = Field(default_factory=FlexibilityOptions)
 
 

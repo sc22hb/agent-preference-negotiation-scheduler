@@ -74,15 +74,39 @@
             </div>
           </fieldset>
 
-          <div class="row">
-            <label for="formExcludedPeriod">Excluded period (hard)</label>
-            <select id="formExcludedPeriod">
-              <option value="">None</option>
-              <option value="morning">Morning</option>
-              <option value="afternoon">Afternoon</option>
-              <option value="evening">Evening</option>
-            </select>
-          </div>
+          <fieldset>
+            <legend>Preferred periods (soft preference)</legend>
+            <div class="checkbox-grid">
+              <label class="checkbox-item"><input type="checkbox" name="formPreferredPeriods" value="morning" />Morning</label>
+              <label class="checkbox-item"><input type="checkbox" name="formPreferredPeriods" value="afternoon" />Afternoon</label>
+              <label class="checkbox-item"><input type="checkbox" name="formPreferredPeriods" value="evening" />Evening</label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Hard constraints: periods you cannot do</legend>
+            <div class="checkbox-grid">
+              <label class="checkbox-item"><input type="checkbox" name="formExcludedPeriods" value="morning" />Morning</label>
+              <label class="checkbox-item"><input type="checkbox" name="formExcludedPeriods" value="afternoon" />Afternoon</label>
+              <label class="checkbox-item"><input type="checkbox" name="formExcludedPeriods" value="evening" />Evening</label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Scoring importance profile (0-200)</legend>
+            <div class="row">
+              <label for="formWeightModality">Modality importance</label>
+              <input id="formWeightModality" type="number" min="0" max="200" value="100" />
+              <label for="formWeightDay">Day importance</label>
+              <input id="formWeightDay" type="number" min="0" max="200" value="100" />
+            </div>
+            <div class="row">
+              <label for="formWeightPeriod">Period importance</label>
+              <input id="formWeightPeriod" type="number" min="0" max="200" value="100" />
+              <label for="formWeightSynergy">Day+period synergy importance</label>
+              <input id="formWeightSynergy" type="number" min="0" max="200" value="100" />
+            </div>
+          </fieldset>
 
           <div class="row">
             <label for="formHorizon">Date horizon</label>
@@ -92,6 +116,7 @@
             <input id="formSoonestWeight" type="number" min="0" max="100" value="60" />
           </div>
           <p class="hint">Soonest weight controls urgency in scoring: 0 ignores soonness, 100 strongly prefers earliest slots.</p>
+          <p class="hint">If you set both preferred days and preferred periods, the scorer adds an extra day+period synergy bonus.</p>
 
         </div>
 

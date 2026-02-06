@@ -3,8 +3,18 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Dict, Iterable, List, Set, Tuple
 
-from nhs_demo.config import DATE_RANGE_EXTENSION_DAYS, RELAXATION_ORDER, UTILITY_WEIGHTS
-from nhs_demo.schemas import BlockerSummary, PatientPreferences, RelaxationQuestion, Slot
+from nhs_demo.config import (
+    DATE_RANGE_EXTENSION_DAYS,
+    MISMATCH_PENALTIES,
+    RELAXATION_ORDER,
+    UTILITY_WEIGHTS,
+)
+from nhs_demo.schemas import (
+    BlockerSummary,
+    PatientPreferences,
+    RelaxationQuestion,
+    Slot,
+)
 
 
 class PatientAgent:
@@ -20,21 +30,38 @@ class PatientAgent:
         max_start: datetime,
     ) -> Tuple[float, Dict[str, float]]:
         breakdown: Dict[str, float] = {}
+        day = self._weekday_for_slot(slot.start_time)
+        period = self._period_for_slot(slot.start_time)
 
-        breakdown["preferred_modality"] = self._preference_component(
+        breakdown["preferred_modality"] = self._weighted_preference_component(
             slot.modality,
             preferences.preferred_modalities,
             UTILITY_WEIGHTS["preferred_modality"],
+            preferences.weight_profile.modality,
+            MISMATCH_PENALTIES["modality"],
         )
-        breakdown["preferred_day"] = self._preference_component(
-            self._weekday_for_slot(slot.start_time),
+        breakdown["preferred_day"] = self._weighted_preference_component(
+            day,
             preferences.preferred_days,
             UTILITY_WEIGHTS["preferred_day"],
+            preferences.weight_profile.day,
+            MISMATCH_PENALTIES["day"],
         )
-        breakdown["preferred_period"] = self._preference_component(
-            self._period_for_slot(slot.start_time),
+        breakdown["preferred_period"] = self._weighted_preference_component(
+            period,
             preferences.preferred_periods,
             UTILITY_WEIGHTS["preferred_period"],
+            preferences.weight_profile.period,
+            MISMATCH_PENALTIES["period"],
+        )
+        breakdown["preferred_day_period"] = self._day_period_component(
+            day=day,
+            period=period,
+            preferences=preferences,
+        )
+        breakdown["adjacent_preferred_day"] = self._adjacent_preferred_day_component(
+            day=day,
+            preferences=preferences,
         )
         breakdown["soonest"] = self._soonest_component(
             slot.start_time,
@@ -70,9 +97,9 @@ class PatientAgent:
 
     def apply_relaxation(self, preferences: PatientPreferences, key: str) -> PatientPreferences:
         if key == "relax_excluded_periods":
-            return preferences.model_copy(update={"excluded_periods": []})
+            return preferences.model_copy(update={"excluded_periods": [], "excluded_day_periods": []})
         if key == "relax_excluded_days":
-            return preferences.model_copy(update={"excluded_days": []})
+            return preferences.model_copy(update={"excluded_days": [], "excluded_day_periods": []})
         if key == "relax_excluded_modalities":
             return preferences.model_copy(update={"excluded_modalities": []})
         if key == "extend_date_horizon":
@@ -80,10 +107,59 @@ class PatientAgent:
             return preferences.model_copy(update={"date_horizon_days": updated_horizon})
         return preferences
 
-    def _preference_component(self, value: str, preferred: List[str], weight: int) -> float:
+    def _weighted_preference_component(
+        self,
+        value: str,
+        preferred: List[str],
+        base_weight: int,
+        weight_profile_pct: int,
+        mismatch_penalty_ratio: float,
+    ) -> float:
         if not preferred:
             return 0.0
-        return float(weight if value in preferred else 0)
+        scaled_weight = self._scaled_weight(base_weight, weight_profile_pct)
+        if value in preferred:
+            return round(scaled_weight, 3)
+        return round(-scaled_weight * mismatch_penalty_ratio, 3)
+
+    def _day_period_component(
+        self,
+        day: str,
+        period: str,
+        preferences: PatientPreferences,
+    ) -> float:
+        if not preferences.preferred_day_periods:
+            return 0.0
+
+        scaled_weight = self._scaled_weight(
+            UTILITY_WEIGHTS["preferred_day_period"],
+            preferences.weight_profile.day_period_synergy,
+        )
+        if any(pair.day == day and pair.period == period for pair in preferences.preferred_day_periods):
+            return round(scaled_weight, 3)
+        return round(-scaled_weight * 0.25, 3)
+
+    def _adjacent_preferred_day_component(
+        self,
+        day: str,
+        preferences: PatientPreferences,
+    ) -> float:
+        if not preferences.preferred_days:
+            return 0.0
+        if day in preferences.preferred_days:
+            return 0.0
+
+        day_idx = self.DAY_ORDER.index(day)
+        preferred_idx = [self.DAY_ORDER.index(item) for item in preferences.preferred_days]
+        if any(min(abs(day_idx - idx), 7 - abs(day_idx - idx)) == 1 for idx in preferred_idx):
+            return round(
+                self._scaled_weight(UTILITY_WEIGHTS["adjacent_preferred_day"], preferences.weight_profile.day),
+                3,
+            )
+        return 0.0
+
+    def _scaled_weight(self, base_weight: int, weight_profile_pct: int) -> float:
+        return base_weight * (weight_profile_pct / 100.0)
 
     def _soonest_component(
         self,
@@ -97,7 +173,8 @@ class PatientAgent:
             return float(max_weight)
         span = (max_start - min_start).total_seconds()
         position = (slot_start - min_start).total_seconds() / span
-        score = max_weight * (1 - position) * (soonest_weight / 100.0)
+        # Non-linear decay gives stronger preference to earlier appointments.
+        score = max_weight * ((1 - position) ** 1.35) * (soonest_weight / 100.0)
         return round(score, 3)
 
     def _period_for_slot(self, dt: datetime) -> str:
@@ -117,7 +194,10 @@ class PatientAgent:
         preferences: PatientPreferences,
     ) -> RelaxationQuestion | None:
         if key == "relax_excluded_periods":
-            if blockers.get("excluded_period", 0) and preferences.excluded_periods and preferences.flexibility.allow_time_relax:
+            period_blockers = blockers.get("excluded_period", 0) + blockers.get("excluded_day_period", 0)
+            if period_blockers and (
+                preferences.excluded_periods or preferences.excluded_day_periods
+            ) and preferences.flexibility.allow_time_relax:
                 return RelaxationQuestion(
                     key=key,
                     prompt="Can we open up the time-of-day restrictions for the next search round?",
@@ -125,7 +205,10 @@ class PatientAgent:
             return None
 
         if key == "relax_excluded_days":
-            if blockers.get("excluded_day", 0) and preferences.excluded_days and preferences.flexibility.allow_time_relax:
+            day_blockers = blockers.get("excluded_day", 0) + blockers.get("excluded_day_period", 0)
+            if day_blockers and (
+                preferences.excluded_days or preferences.excluded_day_periods
+            ) and preferences.flexibility.allow_time_relax:
                 return RelaxationQuestion(
                     key=key,
                     prompt="Can we remove day exclusions and search all weekdays?",

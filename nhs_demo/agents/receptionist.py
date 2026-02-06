@@ -8,9 +8,11 @@ from typing import Any, Dict, List, Tuple
 from nhs_demo.config import DEFAULT_DATE_HORIZON_DAYS
 from nhs_demo.schemas import (
     ClarificationQuestion,
+    DayPeriodPreference,
     ExtractorMode,
     IntakeSummary,
     PatientPreferences,
+    PreferenceWeightProfile,
     RelaxationQuestion,
 )
 
@@ -170,6 +172,10 @@ class ReceptionistAgent:
             "No diagnosis. No treatment advice. "
             "Use modalities from [in_person, phone, video], "
             "days from [Mon..Sun], periods from [morning, afternoon, evening]. "
+            "preferences may include preferred_day_periods/excluded_day_periods as "
+            "objects with keys day and period. "
+            "preferences may include weight_profile with keys modality/day/period/day_period_synergy "
+            "in range 0..200. "
             "clarification_questions max length 2.\n\n"
             f"Text:\n{text}\n\n"
             f"Preference hint:\n{json.dumps(hint)}"
@@ -259,6 +265,13 @@ class ReceptionistAgent:
             pref_payload.get("excluded_periods", pref_payload.get("blocked_periods", []))
         )
 
+        preferred_day_periods = self._extract_day_period_pairs(
+            pref_payload.get("preferred_day_periods", pref_payload.get("day_periods", []))
+        )
+        excluded_day_periods = self._extract_day_period_pairs(
+            pref_payload.get("excluded_day_periods", pref_payload.get("blocked_day_periods", []))
+        )
+
         # Preserve hard constraints from deterministic parser.
         excluded_modalities = self._ordered_union(
             excluded_modalities,
@@ -271,6 +284,10 @@ class ReceptionistAgent:
             list(rule_preferences.excluded_periods),
             self.PERIODS,
         )
+        excluded_day_periods = self._merge_day_period_pairs(
+            excluded_day_periods,
+            list(rule_preferences.excluded_day_periods),
+        )
 
         if not preferred_modalities:
             preferred_modalities = list(rule_preferences.preferred_modalities)
@@ -278,6 +295,8 @@ class ReceptionistAgent:
             preferred_days = list(rule_preferences.preferred_days)
         if not preferred_periods:
             preferred_periods = list(rule_preferences.preferred_periods)
+        if not preferred_day_periods:
+            preferred_day_periods = list(rule_preferences.preferred_day_periods)
 
         strict_modality = self._strict_modality_from_text(text)
         if strict_modality:
@@ -292,13 +311,25 @@ class ReceptionistAgent:
         preferred_modalities = self._remove_excluded(preferred_modalities, excluded_modalities, self.MODALITIES)
         preferred_days = self._remove_excluded(preferred_days, excluded_days, self.DAY_ORDER)
         preferred_periods = self._remove_excluded(preferred_periods, excluded_periods, self.PERIODS)
+        preferred_day_periods = self._remove_excluded_day_period_pairs(
+            preferred_day_periods,
+            excluded_day_periods,
+        )
 
         hint_horizon = preference_hint.date_horizon_days if preference_hint else DEFAULT_DATE_HORIZON_DAYS
         hint_soonest = preference_hint.soonest_weight if preference_hint else 60
         hint_flex = preference_hint.flexibility if preference_hint else None
+        hint_weight_profile = (
+            preference_hint.weight_profile if preference_hint else PreferenceWeightProfile()
+        )
 
         date_horizon = pref_payload.get("date_horizon_days", hint_horizon)
         soonest_weight = pref_payload.get("soonest_weight", hint_soonest)
+        weight_profile = self._extract_weight_profile(
+            pref_payload.get("weight_profile", {}),
+            hint_weight_profile,
+            text,
+        )
 
         try:
             date_horizon = int(date_horizon)
@@ -316,8 +347,11 @@ class ReceptionistAgent:
             excluded_days=excluded_days,
             preferred_periods=preferred_periods,
             excluded_periods=excluded_periods,
+            preferred_day_periods=preferred_day_periods,
+            excluded_day_periods=excluded_day_periods,
             date_horizon_days=max(1, min(30, date_horizon)),
             soonest_weight=max(0, min(100, soonest_weight)),
+            weight_profile=weight_profile,
             flexibility=hint_flex if hint_flex else PatientPreferences().flexibility,
         )
 
@@ -328,6 +362,98 @@ class ReceptionistAgent:
     def _remove_excluded(self, preferred: List[str], excluded: List[str], order: List[str]) -> List[str]:
         preferred_set = set(preferred) - set(excluded)
         return [item for item in order if item in preferred_set]
+
+    def _extract_day_period_pairs(self, raw: Any) -> List[DayPeriodPreference]:
+        if not isinstance(raw, list):
+            return []
+
+        pairs: List[DayPeriodPreference] = []
+        for item in raw:
+            if isinstance(item, dict):
+                days = self._extract_days([str(item.get("day", ""))])
+                periods = self._extract_periods([str(item.get("period", ""))])
+            else:
+                item_text = str(item)
+                days = self._extract_days([item_text])
+                periods = self._extract_periods([item_text])
+
+            for day in days:
+                for period in periods:
+                    pairs.append(DayPeriodPreference(day=day, period=period))
+        return self._dedupe_day_period_pairs(pairs)
+
+    def _dedupe_day_period_pairs(self, pairs: List[DayPeriodPreference]) -> List[DayPeriodPreference]:
+        seen: set[tuple[str, str]] = set()
+        ordered: List[DayPeriodPreference] = []
+        day_idx = {day: idx for idx, day in enumerate(self.DAY_ORDER)}
+        period_idx = {period: idx for idx, period in enumerate(self.PERIODS)}
+        for pair in sorted(pairs, key=lambda item: (day_idx[item.day], period_idx[item.period])):
+            key = (pair.day, pair.period)
+            if key in seen:
+                continue
+            seen.add(key)
+            ordered.append(pair)
+        return ordered
+
+    def _merge_day_period_pairs(
+        self,
+        left: List[DayPeriodPreference],
+        right: List[DayPeriodPreference],
+    ) -> List[DayPeriodPreference]:
+        return self._dedupe_day_period_pairs(left + right)
+
+    def _remove_excluded_day_period_pairs(
+        self,
+        preferred: List[DayPeriodPreference],
+        excluded: List[DayPeriodPreference],
+    ) -> List[DayPeriodPreference]:
+        excluded_keys = {(pair.day, pair.period) for pair in excluded}
+        filtered = [pair for pair in preferred if (pair.day, pair.period) not in excluded_keys]
+        return self._dedupe_day_period_pairs(filtered)
+
+    def _extract_weight_profile(
+        self,
+        raw: Any,
+        hint: PreferenceWeightProfile,
+        text: str,
+    ) -> PreferenceWeightProfile:
+        payload = raw if isinstance(raw, dict) else {}
+
+        def coerce(name: str, fallback: int) -> int:
+            value = payload.get(name, fallback)
+            try:
+                parsed = int(value)
+            except Exception:
+                parsed = fallback
+            return max(0, min(200, parsed))
+
+        profile = PreferenceWeightProfile(
+            modality=coerce("modality", hint.modality),
+            day=coerce("day", hint.day),
+            period=coerce("period", hint.period),
+            day_period_synergy=coerce("day_period_synergy", hint.day_period_synergy),
+        )
+        return self._apply_text_weight_cues(profile, text)
+
+    def _apply_text_weight_cues(
+        self,
+        profile: PreferenceWeightProfile,
+        text: str,
+    ) -> PreferenceWeightProfile:
+        lowered = self._normalize_text_for_parsing(text.lower())
+
+        # Strong language boosts importance of temporal and modality matching in scoring.
+        strict_markers = ["must", "has to", "only", "required", "urgent", "asap", "soon"]
+        if any(marker in lowered for marker in strict_markers):
+            profile = profile.model_copy(
+                update={
+                    "modality": min(200, profile.modality + 20),
+                    "day": min(200, profile.day + 15),
+                    "period": min(200, profile.period + 20),
+                    "day_period_synergy": min(200, profile.day_period_synergy + 25),
+                }
+            )
+        return profile
 
     def _extract_modalities(self, raw: Any) -> List[str]:
         items = self._listify(raw)
@@ -418,6 +544,8 @@ class ReceptionistAgent:
                 preferences.excluded_days,
                 preferences.preferred_periods,
                 preferences.excluded_periods,
+                preferences.preferred_day_periods,
+                preferences.excluded_day_periods,
             ]
         )
         if not has_availability_signal:
@@ -470,8 +598,21 @@ class ReceptionistAgent:
             parts.append("Preferred periods: " + ", ".join(preferences.preferred_periods))
         if preferences.excluded_periods:
             parts.append("Excluded periods: " + ", ".join(preferences.excluded_periods))
+        if preferences.preferred_day_periods:
+            pairs = [f"{pair.day}-{pair.period}" for pair in preferences.preferred_day_periods]
+            parts.append("Preferred day-periods: " + ", ".join(pairs))
+        if preferences.excluded_day_periods:
+            pairs = [f"{pair.day}-{pair.period}" for pair in preferences.excluded_day_periods]
+            parts.append("Excluded day-periods: " + ", ".join(pairs))
         parts.append(f"Date horizon days: {preferences.date_horizon_days}")
         parts.append(f"Soonest weight: {preferences.soonest_weight}")
+        parts.append(
+            "Weight profile: "
+            f"modality={preferences.weight_profile.modality}, "
+            f"day={preferences.weight_profile.day}, "
+            f"period={preferences.weight_profile.period}, "
+            f"synergy={preferences.weight_profile.day_period_synergy}"
+        )
         return ". ".join(parts)
 
     def _constraints_from_preferences(self, preferences: PatientPreferences) -> List[str]:
@@ -482,6 +623,8 @@ class ReceptionistAgent:
             constraints.append("excluded_days")
         if preferences.excluded_periods:
             constraints.append("excluded_periods")
+        if preferences.excluded_day_periods:
+            constraints.append("excluded_day_periods")
         return constraints
 
     def _extract_category(self, text: str) -> str:
@@ -516,6 +659,8 @@ class ReceptionistAgent:
         self._collect_modality_preferences(lowered, preferred_modalities, excluded_modalities)
         preferred_days, excluded_days = self._collect_days(lowered)
         preferred_periods, excluded_periods = self._collect_periods(lowered)
+        preferred_day_periods, excluded_day_periods = self._collect_day_period_preferences(lowered)
+        weight_profile = self._apply_text_weight_cues(PreferenceWeightProfile(), lowered)
 
         return PatientPreferences(
             preferred_modalities=preferred_modalities,
@@ -524,8 +669,11 @@ class ReceptionistAgent:
             excluded_days=excluded_days,
             preferred_periods=preferred_periods,
             excluded_periods=excluded_periods,
+            preferred_day_periods=preferred_day_periods,
+            excluded_day_periods=excluded_day_periods,
             date_horizon_days=DEFAULT_DATE_HORIZON_DAYS,
             soonest_weight=60,
+            weight_profile=weight_profile,
         )
 
     def _normalize_text_for_parsing(self, lowered: str) -> str:
@@ -588,6 +736,14 @@ class ReceptionistAgent:
                 )
 
                 if neg_idx >= 0 and neg_idx >= pos_idx:
+                    window = lowered[max(0, match.start() - 20) : min(len(lowered), match.end() + 30)]
+                    period_in_window = any(
+                        re.search(period_pattern, window) is not None
+                        for period_pattern in self.PERIOD_PATTERNS.values()
+                    )
+                    is_all_day = "all day" in window
+                    if period_in_window and not is_all_day:
+                        continue
                     excluded_days.add(day)
                 else:
                     preferred_days.add(day)
@@ -596,6 +752,32 @@ class ReceptionistAgent:
         ordered_preferred = [day for day in self.DAY_ORDER if day in preferred_days]
         ordered_excluded = [day for day in self.DAY_ORDER if day in excluded_days]
         return ordered_preferred, ordered_excluded
+
+    def _collect_day_period_preferences(
+        self,
+        lowered: str,
+    ) -> Tuple[List[DayPeriodPreference], List[DayPeriodPreference]]:
+        preferred: List[DayPeriodPreference] = []
+        excluded: List[DayPeriodPreference] = []
+        clauses = re.split(r"[,;.\n]|\bbut\b", lowered)
+        negation_pattern = re.compile(r"\b(no|not|avoid|cannot|unavailable)\b")
+
+        for clause in clauses:
+            clause = clause.strip()
+            if not clause or "all day" in clause:
+                continue
+
+            days = [day for day, pattern in self.DAY_PATTERNS.items() if re.search(pattern, clause)]
+            periods = [period for period, pattern in self.PERIOD_PATTERNS.items() if re.search(pattern, clause)]
+            if not days or not periods:
+                continue
+
+            target = excluded if negation_pattern.search(clause) else preferred
+            for day in days:
+                for period in periods:
+                    target.append(DayPeriodPreference(day=day, period=period))
+
+        return self._dedupe_day_period_pairs(preferred), self._dedupe_day_period_pairs(excluded)
 
     def _collect_periods(self, lowered: str) -> Tuple[List[str], List[str]]:
         preferred_periods: List[str] = []

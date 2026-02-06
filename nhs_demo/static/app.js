@@ -295,26 +295,61 @@ function getCheckedValues(fieldName) {
 
 function buildFormPreferences() {
   const dayOrder = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const periodOrder = ["morning", "afternoon", "evening"];
   const preferredModality = document.getElementById("formPreferredModality").value;
   const preferredDaysRaw = getCheckedValues("formPreferredDays");
   const excludedDaysRaw = getCheckedValues("formExcludedDays");
-  const excludedPeriod = document.getElementById("formExcludedPeriod").value;
+  const preferredPeriodsRaw = getCheckedValues("formPreferredPeriods");
+  const excludedPeriodsRaw = getCheckedValues("formExcludedPeriods");
   const dateHorizon = Number(document.getElementById("formHorizon").value || 10);
   const soonestWeight = Number(document.getElementById("formSoonestWeight").value || 60);
+  const weightModality = Number(document.getElementById("formWeightModality").value || 100);
+  const weightDay = Number(document.getElementById("formWeightDay").value || 100);
+  const weightPeriod = Number(document.getElementById("formWeightPeriod").value || 100);
+  const weightSynergy = Number(document.getElementById("formWeightSynergy").value || 100);
+
   const excludedDaySet = new Set(excludedDaysRaw);
   const preferredDaySet = new Set(preferredDaysRaw.filter((day) => !excludedDaySet.has(day)));
+  const excludedPeriodSet = new Set(excludedPeriodsRaw);
+  const preferredPeriodSet = new Set(
+    preferredPeriodsRaw.filter((period) => !excludedPeriodSet.has(period))
+  );
   const preferredDays = dayOrder.filter((day) => preferredDaySet.has(day));
   const excludedDays = dayOrder.filter((day) => excludedDaySet.has(day));
+  const preferredPeriods = periodOrder.filter((period) => preferredPeriodSet.has(period));
+  const excludedPeriods = periodOrder.filter((period) => excludedPeriodSet.has(period));
+
+  const preferredDayPeriods = [];
+  for (const day of preferredDays) {
+    for (const period of preferredPeriods) {
+      preferredDayPeriods.push({ day, period });
+    }
+  }
+
+  const excludedDayPeriods = [];
+  for (const day of excludedDays) {
+    for (const period of excludedPeriods) {
+      excludedDayPeriods.push({ day, period });
+    }
+  }
 
   return {
     preferred_modalities: preferredModality ? [preferredModality] : [],
     excluded_modalities: [],
     preferred_days: preferredDays,
     excluded_days: excludedDays,
-    preferred_periods: [],
-    excluded_periods: excludedPeriod ? [excludedPeriod] : [],
+    preferred_periods: preferredPeriods,
+    excluded_periods: excludedPeriods,
+    preferred_day_periods: preferredDayPeriods,
+    excluded_day_periods: excludedDayPeriods,
     date_horizon_days: Math.max(1, Math.min(30, dateHorizon)),
     soonest_weight: Math.max(0, Math.min(100, soonestWeight)),
+    weight_profile: {
+      modality: Math.max(0, Math.min(200, weightModality)),
+      day: Math.max(0, Math.min(200, weightDay)),
+      period: Math.max(0, Math.min(200, weightPeriod)),
+      day_period_synergy: Math.max(0, Math.min(200, weightSynergy)),
+    },
     flexibility: {
       allow_time_relax: true,
       allow_modality_relax: true,

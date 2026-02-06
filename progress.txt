@@ -11,3 +11,14 @@
 [2026-02-06] Updated `nhs_demo/orchestrator.py` imports to reference per-agent modules directly.
 [2026-02-06] Updated `nhs_demo/agents/__init__.py` to export all per-agent classes and allocation result type.
 [2026-02-06] Fixed truncation bug in `nhs_demo/agents/receptionist.py` (`_last_cue_index` loop/return) introduced during module split.
+[2026-02-06] Extended `PatientPreferences` schema with advanced scoring fields: `preferred_day_periods`, `excluded_day_periods`, and `weight_profile` (modality/day/period/synergy weights).
+[2026-02-06] Added advanced scoring constants in `nhs_demo/config.py`: day-period synergy/adjacency utility weights, mismatch penalties, and new blocker severity for `excluded_day_period`.
+[2026-02-06] Upgraded slot scoring in `nhs_demo/agents/patient_agent.py` with weighted mismatch penalties, day-period synergy scoring, adjacent-day bonus, profile-scaled weights, and non-linear soonest decay.
+[2026-02-06] Added hard veto `excluded_day_period` in `nhs_demo/agents/master_allocator_agent.py` to enforce specific day+period exclusions.
+[2026-02-06] Enhanced `nhs_demo/agents/receptionist.py` intake schema extraction: added parsing/merging for `preferred_day_periods` and `excluded_day_periods`, added weight-profile extraction/cues, upgraded LLM prompt to request richer preference schema, and improved day parsing so period-specific constraints do not over-block full days.
+[2026-02-06] Upgraded form UI in `nhs_demo/templates/index.html` with multi-select preferred/excluded periods and scoring importance profile controls (modality/day/period/synergy).
+[2026-02-06] Updated `nhs_demo/static/app.js` form payload builder to emit advanced preference schema (`preferred_day_periods`, `excluded_day_periods`, `weight_profile`) and multi-period selections.
+[2026-02-06] Updated relaxation logic in `nhs_demo/agents/patient_agent.py` so day-period blockers influence relaxation prompts and related relaxations clear `excluded_day_periods`.
+[2026-02-06] Added new scheduler unit coverage in `tests/test_unit_scheduler.py` verifying weight profile scaling changes day/period utility component strength and total slot scores deterministically.
+[2026-02-06] Added new intake unit coverage in `tests/test_unit_intake.py` verifying period-specific exclusions are captured as day-period hard constraints without over-blocking whole days, plus strict-language weight-profile boosts.
+[2026-02-06] Validation run complete: `PYTHONPATH=. pytest -q` passed with 19 tests.

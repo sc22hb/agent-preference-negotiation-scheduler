@@ -140,6 +140,8 @@ class MasterAllocatorAgent:
             reasons.append("excluded_day")
 
         period = self._period_for_slot(slot.start_time)
+        if any(pair.day == day and pair.period == period for pair in preferences.excluded_day_periods):
+            reasons.append("excluded_day_period")
         if period in preferences.excluded_periods:
             reasons.append("excluded_period")
 

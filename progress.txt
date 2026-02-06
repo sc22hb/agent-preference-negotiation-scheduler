@@ -1,0 +1,13 @@
+# Progress Change Log
+
+[2026-02-06] Initialized progress.txt as requested.
+[2026-02-06] Refactor start: created `nhs_demo/agents/safety_gate.py` and `nhs_demo/agents/receptionist.py` while splitting large agent modules.
+[2026-02-06] Added `nhs_demo/agents/triage_routing.py` and moved `TriageRoutingAgent` logic into its own module.
+[2026-02-06] Replaced `nhs_demo/agents/intake.py` with a compatibility export module importing from per-agent files.
+[2026-02-06] Added `nhs_demo/agents/rota_agent.py` and moved `RotaAgent` into its own file.
+[2026-02-06] Added `nhs_demo/agents/patient_agent.py` and moved `PatientAgent` into its own file.
+[2026-02-06] Added `nhs_demo/agents/master_allocator_agent.py` and moved `MasterAllocatorAgent` + `AllocationResult` into its own file.
+[2026-02-06] Replaced `nhs_demo/agents/scheduling.py` with a compatibility export module importing from per-agent files.
+[2026-02-06] Updated `nhs_demo/orchestrator.py` imports to reference per-agent modules directly.
+[2026-02-06] Updated `nhs_demo/agents/__init__.py` to export all per-agent classes and allocation result type.
+[2026-02-06] Fixed truncation bug in `nhs_demo/agents/receptionist.py` (`_last_cue_index` loop/return) introduced during module split.

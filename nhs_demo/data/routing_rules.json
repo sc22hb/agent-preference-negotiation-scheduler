@@ -1,0 +1,62 @@
+[
+  {
+    "id": "pharmacist_repeat_prescription",
+    "description": "Medication refill and repeat prescription requests",
+    "match": {"any": ["repeat prescription", "medication refill", "prescription renewal"]},
+    "route": {
+      "service_type": "Pharmacist",
+      "appointment_length_minutes": 10,
+      "allowed_modalities": ["phone", "in_person"],
+      "urgency_band": "routine",
+      "confidence": 0.96
+    }
+  },
+  {
+    "id": "nurse_blood_test",
+    "description": "Blood test and basic observations",
+    "match": {"any": ["blood test", "bp check", "blood pressure", "vaccination"]},
+    "route": {
+      "service_type": "Nurse",
+      "appointment_length_minutes": 15,
+      "allowed_modalities": ["in_person"],
+      "urgency_band": "routine",
+      "confidence": 0.9
+    }
+  },
+  {
+    "id": "gp_soon_urinary_or_respiratory",
+    "description": "Symptoms usually routed to GP soon appointments",
+    "match": {"any": ["uti", "urinary", "persistent cough", "asthma worsening", "wheezing"]},
+    "route": {
+      "service_type": "GP",
+      "appointment_length_minutes": 20,
+      "allowed_modalities": ["in_person", "phone", "video"],
+      "urgency_band": "soon",
+      "confidence": 0.87
+    }
+  },
+  {
+    "id": "admin_documents",
+    "description": "Administrative requests",
+    "match": {"any": ["fit note", "sick note", "letter", "admin", "certificate"]},
+    "route": {
+      "service_type": "Admin",
+      "appointment_length_minutes": 10,
+      "allowed_modalities": ["phone", "video"],
+      "urgency_band": "routine",
+      "confidence": 0.86
+    }
+  },
+  {
+    "id": "gp_default",
+    "description": "Default GP routing fallback",
+    "match": {"any": []},
+    "route": {
+      "service_type": "GP",
+      "appointment_length_minutes": 15,
+      "allowed_modalities": ["in_person", "phone", "video"],
+      "urgency_band": "routine",
+      "confidence": 0.6
+    }
+  }
+]

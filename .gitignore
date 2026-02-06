@@ -5,3 +5,7 @@ lit.txt
 zaman.pdf
 report.txt
 *.pyc
+.env
+.venv/
+README.md
+tests/

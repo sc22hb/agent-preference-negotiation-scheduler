@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NHS-Style MAS Scheduling Demo</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="page-header">
+    <h1>NHS-Style Multi-Agent Scheduling Demo</h1>
+    <p>Synthetic data only. Technical demonstrator.</p>
+  </header>
+
+  <main class="chat-layout">
+    <section class="chat-card">
+      <div id="chatThread" class="chat-thread"></div>
+
+      <div class="composer">
+        <div class="row">
+          <label for="captureMode">Interface</label>
+          <select id="captureMode">
+            <option value="conversation" selected>Conversational</option>
+            <option value="form">Form-based</option>
+          </select>
+        </div>
+
+        <div id="conversationInputs">
+          <label for="userText">Your message</label>
+          <textarea id="userText" rows="4" placeholder="Example: persistent cough for 2 weeks, no Monday mornings, phone preferred"></textarea>
+        </div>
+
+        <div id="formInputs" style="display:none;">
+          <label for="formReasonCode">Reason</label>
+          <select id="formReasonCode">
+            <option value="repeat_prescription">Repeat prescription</option>
+            <option value="blood_test">Blood test</option>
+            <option value="persistent_cough">Persistent cough</option>
+            <option value="uti_symptoms">UTI symptoms</option>
+            <option value="sore_throat">Sore throat</option>
+            <option value="admin_request">Admin request</option>
+            <option value="general_review">General review</option>
+          </select>
+
+          <div class="row">
+            <label for="formPreferredModality">Preferred modality</label>
+            <select id="formPreferredModality">
+              <option value="">No preference</option>
+              <option value="in_person">In person</option>
+              <option value="phone">Phone</option>
+              <option value="video">Video</option>
+            </select>
+          </div>
+
+          <fieldset>
+            <legend>Preferred days (soft preference)</legend>
+            <div class="checkbox-grid">
+              <label class="checkbox-item"><input type="checkbox" name="formPreferredDays" value="Mon" />Mon</label>
+              <label class="checkbox-item"><input type="checkbox" name="formPreferredDays" value="Tue" />Tue</label>
+              <label class="checkbox-item"><input type="checkbox" name="formPreferredDays" value="Wed" />Wed</label>
+              <label class="checkbox-item"><input type="checkbox" name="formPreferredDays" value="Thu" />Thu</label>
+              <label class="checkbox-item"><input type="checkbox" name="formPreferredDays" value="Fri" />Fri</label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Hard constraints: days you cannot do</legend>
+            <div class="checkbox-grid">
+              <label class="checkbox-item"><input type="checkbox" name="formExcludedDays" value="Mon" />Mon</label>
+              <label class="checkbox-item"><input type="checkbox" name="formExcludedDays" value="Tue" />Tue</label>
+              <label class="checkbox-item"><input type="checkbox" name="formExcludedDays" value="Wed" />Wed</label>
+              <label class="checkbox-item"><input type="checkbox" name="formExcludedDays" value="Thu" />Thu</label>
+              <label class="checkbox-item"><input type="checkbox" name="formExcludedDays" value="Fri" />Fri</label>
+            </div>
+          </fieldset>
+
+          <div class="row">
+            <label for="formExcludedPeriod">Excluded period (hard)</label>
+            <select id="formExcludedPeriod">
+              <option value="">None</option>
+              <option value="morning">Morning</option>
+              <option value="afternoon">Afternoon</option>
+              <option value="evening">Evening</option>
+            </select>
+          </div>
+
+          <div class="row">
+            <label for="formHorizon">Date horizon</label>
+            <input id="formHorizon" type="number" min="1" max="30" value="10" />
+
+            <label for="formSoonestWeight">Soonest weight</label>
+            <input id="formSoonestWeight" type="number" min="0" max="100" value="60" />
+          </div>
+          <p class="hint">Soonest weight controls urgency in scoring: 0 ignores soonness, 100 strongly prefers earliest slots.</p>
+
+        </div>
+
+        <div class="actions">
+          <button id="btnIntake">Submit Intake</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side-card">
+      <h2>Admin Panel</h2>
+      <p id="runIdView">Run ID: not started</p>
+      <div class="actions">
+        <a id="auditPageLink" class="button-link disabled" href="#">Open Audit Page</a>
+        <a id="auditJsonLink" class="button-link disabled" href="#">Download Audit JSON</a>
+      </div>
+      <h3>State</h3>
+      <pre id="stateSummary">No run yet.</pre>
+      <h3>Intake</h3>
+      <pre id="adminIntake">No intake response yet.</pre>
+      <h3>Route</h3>
+      <pre id="adminRoute">No route response yet.</pre>
+      <h3>Scheduling</h3>
+      <pre id="adminScheduling">No scheduling responses yet.</pre>
+      <h3>Slot Scores (Latest Round)</h3>
+      <pre id="adminSlotScores">No slot scoring yet.</pre>
+      <h3>Relaxation Trail</h3>
+      <pre id="adminRelaxTrail">No relaxations yet.</pre>
+    </aside>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

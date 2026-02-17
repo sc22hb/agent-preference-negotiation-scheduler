@@ -235,10 +235,28 @@ class SlotScore(BaseModel):
     veto_reasons: List[str] = Field(default_factory=list)
 
 
+class SlotInventoryItem(BaseModel):
+    slot_id: str
+    service_type: ServiceType
+    clinician_id: str
+    site: str
+    modality: Modality
+    start_time: datetime
+    duration_minutes: int
+
+
+class SlotInventoryResponse(BaseModel):
+    hospital: str
+    database_horizon_days: int
+    database_build_count: int
+    services: Dict[str, List[SlotInventoryItem]] = Field(default_factory=dict)
+
+
 class ScheduleRelaxRequest(BaseModel):
     run_id: str
     preferences: PatientPreferences
     answers: Dict[str, bool]
+    relaxation_selections: Dict[str, List[str]] = Field(default_factory=dict)
 
 
 class ScheduleRelaxResponse(BaseModel):

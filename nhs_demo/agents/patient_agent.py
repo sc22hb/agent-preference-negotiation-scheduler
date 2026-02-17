@@ -107,6 +107,27 @@ class PatientAgent:
             return preferences.model_copy(update={"date_horizon_days": updated_horizon})
         return preferences
 
+    def apply_partial_day_relaxation(
+        self,
+        preferences: PatientPreferences,
+        selected_days: List[str],
+    ) -> PatientPreferences:
+        allowed_days = set(self.DAY_ORDER)
+        selected = {day for day in selected_days if day in allowed_days}
+        if not selected:
+            return preferences
+
+        remaining_excluded_days = [day for day in preferences.excluded_days if day not in selected]
+        remaining_excluded_day_periods = [
+            pair for pair in preferences.excluded_day_periods if pair.day not in selected
+        ]
+        return preferences.model_copy(
+            update={
+                "excluded_days": remaining_excluded_days,
+                "excluded_day_periods": remaining_excluded_day_periods,
+            }
+        )
+
     def _weighted_preference_component(
         self,
         value: str,

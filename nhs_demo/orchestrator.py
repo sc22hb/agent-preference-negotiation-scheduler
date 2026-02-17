@@ -27,6 +27,8 @@ from nhs_demo.schemas import (
     ScheduleOfferResponse,
     ScheduleRelaxRequest,
     ScheduleRelaxResponse,
+    SlotInventoryItem,
+    SlotInventoryResponse,
 )
 
 
@@ -291,6 +293,53 @@ class DemoOrchestrator:
             message="No slot yet. Relaxation approval required for next round.",
         )
 
+    def preview_offer(self, payload: ScheduleOfferRequest) -> ScheduleOfferResponse:
+        run = self._get_run(payload.run_id)
+        if run.safety.triggered:
+            return ScheduleOfferResponse(
+                run_id=run.run_id,
+                status="safety_escalation",
+                round_number=run.round_number,
+                slot_scores=[],
+                message=run.safety.message or "Safety escalation",
+            )
+
+        candidate_horizon = max(
+            payload.preferences.date_horizon_days + DATE_RANGE_EXTENSION_DAYS,
+            DEFAULT_DATE_HORIZON_DAYS + DATE_RANGE_EXTENSION_DAYS,
+        )
+        candidate_slots = self.rota_agent.generate_slots(payload.routing_decision, candidate_horizon)
+        allocation = self.allocator_agent.allocate(
+            routing=payload.routing_decision,
+            preferences=payload.preferences,
+            candidate_slots=candidate_slots,
+            patient_agent=self.patient_agent,
+        )
+        slot_scores = self._build_slot_scores(
+            evaluations=allocation.candidate_evaluations,
+            allowed_modalities=payload.routing_decision.allowed_modalities,
+        )
+
+        if allocation.booking:
+            return ScheduleOfferResponse(
+                run_id=run.run_id,
+                status="booked",
+                round_number=run.round_number,
+                booking=allocation.booking,
+                slot_scores=slot_scores,
+                blocker_summary=allocation.blocker_summary,
+                message="Preview found a feasible booking.",
+            )
+
+        return ScheduleOfferResponse(
+            run_id=run.run_id,
+            status="open",
+            round_number=run.round_number,
+            slot_scores=slot_scores,
+            blocker_summary=allocation.blocker_summary,
+            message="Preview found no feasible booking with current constraints.",
+        )
+
     def relax(self, payload: ScheduleRelaxRequest) -> ScheduleRelaxResponse:
         run = self._get_run(payload.run_id)
         if run.status != "needs_relaxation":
@@ -303,9 +352,35 @@ class DemoOrchestrator:
         for question in run.pending_relaxations:
             approved = bool(payload.answers.get(question.key, False))
             if approved:
-                updated_preferences = self.patient_agent.apply_relaxation(updated_preferences, question.key)
+                if question.key == "relax_excluded_days":
+                    selected_days = payload.relaxation_selections.get(question.key, [])
+                    if selected_days:
+                        updated_preferences = self.patient_agent.apply_partial_day_relaxation(
+                            updated_preferences,
+                            selected_days,
+                        )
+                        normalized_days = [
+                            day for day in self.patient_agent.DAY_ORDER if day in set(selected_days)
+                        ]
+                        if normalized_days:
+                            run.relaxation_history.append(
+                                f"relax_excluded_days_partial:{','.join(normalized_days)}"
+                            )
+                        else:
+                            run.relaxation_history.append(question.key)
+                    else:
+                        updated_preferences = self.patient_agent.apply_relaxation(
+                            updated_preferences,
+                            question.key,
+                        )
+                        run.relaxation_history.append(question.key)
+                else:
+                    updated_preferences = self.patient_agent.apply_relaxation(
+                        updated_preferences,
+                        question.key,
+                    )
+                    run.relaxation_history.append(question.key)
                 applied.append(question.key)
-                run.relaxation_history.append(question.key)
             else:
                 rejected.append(question.key)
 
@@ -341,6 +416,37 @@ class DemoOrchestrator:
             failure_reason=run.failure_reason,
             created_at=run.created_at,
             updated_at=run.updated_at,
+        )
+
+    def slot_inventory(
+        self,
+        service_type: str | None = None,
+        horizon_days: int | None = None,
+    ) -> SlotInventoryResponse:
+        inventory = self.rota_agent.list_inventory(
+            service_type=service_type,
+            horizon_days=horizon_days,
+        )
+        services: dict[str, List[SlotInventoryItem]] = {}
+        for service, slots in inventory.items():
+            services[service] = [
+                SlotInventoryItem(
+                    slot_id=slot.slot_id,
+                    service_type=slot.service_type,  # type: ignore[arg-type]
+                    clinician_id=slot.clinician_id,
+                    site=slot.site,
+                    modality=slot.modality,  # type: ignore[arg-type]
+                    start_time=slot.start_time,
+                    duration_minutes=slot.duration_minutes,
+                )
+                for slot in slots
+            ]
+
+        return SlotInventoryResponse(
+            hospital=self.rota_agent.HOSPITAL_NAME,
+            database_horizon_days=self.rota_agent.database_horizon_days,
+            database_build_count=self.rota_agent.database_build_count,
+            services=services,
         )
 
     def get_run_state(self, run_id: str) -> RunState:

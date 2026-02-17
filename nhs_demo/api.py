@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -19,7 +20,28 @@ from nhs_demo.schemas import (
     ScheduleOfferResponse,
     ScheduleRelaxRequest,
     ScheduleRelaxResponse,
+    SlotInventoryResponse,
 )
+
+
+def _load_local_env() -> None:
+    project_root = Path(__file__).resolve().parent.parent
+    env_path = project_root / ".env"
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("\"").strip("'")
+        if key:
+            os.environ.setdefault(key, value)
+
+
+_load_local_env()
 
 
 def create_app() -> FastAPI:
@@ -84,6 +106,13 @@ def create_app() -> FastAPI:
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.post("/api/schedule/preview", response_model=ScheduleOfferResponse)
+    def schedule_preview(payload: ScheduleOfferRequest) -> ScheduleOfferResponse:
+        try:
+            return orchestrator.preview_offer(payload)
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.post("/api/schedule/relax", response_model=ScheduleRelaxResponse)
     def schedule_relax(payload: ScheduleRelaxRequest) -> ScheduleRelaxResponse:
         try:
@@ -97,6 +126,19 @@ def create_app() -> FastAPI:
             return orchestrator.audit(run_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.get("/api/slots", response_model=SlotInventoryResponse)
+    def get_slot_inventory(
+        service_type: str | None = None,
+        horizon_days: int | None = None,
+    ) -> SlotInventoryResponse:
+        try:
+            return orchestrator.slot_inventory(
+                service_type=service_type,
+                horizon_days=horizon_days,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/health")
     def health() -> dict:

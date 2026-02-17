@@ -25,6 +25,13 @@
           </select>
         </div>
 
+        <div class="row">
+          <label class="mode-toggle" for="humanModeToggle">
+            <input id="humanModeToggle" type="checkbox" />
+            Human conversation mode (hide parsing details)
+          </label>
+        </div>
+
         <div id="conversationInputs">
           <label for="userText">Your message</label>
           <textarea id="userText" rows="4" placeholder="Example: persistent cough for 2 weeks, no Monday mornings, phone preferred"></textarea>
@@ -53,70 +60,135 @@
           </div>
 
           <fieldset>
-            <legend>Preferred days (soft preference)</legend>
+            <legend>Hard constraints: modalities you cannot do</legend>
             <div class="checkbox-grid">
-              <label class="checkbox-item"><input type="checkbox" name="formPreferredDays" value="Mon" />Mon</label>
-              <label class="checkbox-item"><input type="checkbox" name="formPreferredDays" value="Tue" />Tue</label>
-              <label class="checkbox-item"><input type="checkbox" name="formPreferredDays" value="Wed" />Wed</label>
-              <label class="checkbox-item"><input type="checkbox" name="formPreferredDays" value="Thu" />Thu</label>
-              <label class="checkbox-item"><input type="checkbox" name="formPreferredDays" value="Fri" />Fri</label>
+              <label class="checkbox-item"><input type="checkbox" id="hard-modality-in_person" />In person</label>
+              <label class="checkbox-item"><input type="checkbox" id="hard-modality-phone" />Phone</label>
+              <label class="checkbox-item"><input type="checkbox" id="hard-modality-video" />Video</label>
             </div>
           </fieldset>
 
           <fieldset>
-            <legend>Hard constraints: days you cannot do</legend>
-            <div class="checkbox-grid">
-              <label class="checkbox-item"><input type="checkbox" name="formExcludedDays" value="Mon" />Mon</label>
-              <label class="checkbox-item"><input type="checkbox" name="formExcludedDays" value="Tue" />Tue</label>
-              <label class="checkbox-item"><input type="checkbox" name="formExcludedDays" value="Wed" />Wed</label>
-              <label class="checkbox-item"><input type="checkbox" name="formExcludedDays" value="Thu" />Thu</label>
-              <label class="checkbox-item"><input type="checkbox" name="formExcludedDays" value="Fri" />Fri</label>
+            <legend>Day + time preferences and hard constraints</legend>
+            <div class="day-time-grid">
+              <div class="day-time-head">Day</div>
+              <div class="day-time-head">Preferred day</div>
+              <div class="day-time-head">Hard block day</div>
+              <div class="day-time-head">Preferred times</div>
+              <div class="day-time-head">Hard blocked times</div>
+
+              <div class="day-time-day">Mon</div>
+              <div><input type="checkbox" id="pref-day-Mon" /></div>
+              <div><input type="checkbox" id="hard-day-Mon" /></div>
+              <div class="day-time-periods">
+                <label><input type="checkbox" id="pref-slot-Mon-morning" />Morning</label>
+                <label><input type="checkbox" id="pref-slot-Mon-afternoon" />Afternoon</label>
+                <label><input type="checkbox" id="pref-slot-Mon-evening" />Evening</label>
+              </div>
+              <div class="day-time-periods">
+                <label><input type="checkbox" id="hard-slot-Mon-morning" />Morning</label>
+                <label><input type="checkbox" id="hard-slot-Mon-afternoon" />Afternoon</label>
+                <label><input type="checkbox" id="hard-slot-Mon-evening" />Evening</label>
+              </div>
+
+              <div class="day-time-day">Tue</div>
+              <div><input type="checkbox" id="pref-day-Tue" /></div>
+              <div><input type="checkbox" id="hard-day-Tue" /></div>
+              <div class="day-time-periods">
+                <label><input type="checkbox" id="pref-slot-Tue-morning" />Morning</label>
+                <label><input type="checkbox" id="pref-slot-Tue-afternoon" />Afternoon</label>
+                <label><input type="checkbox" id="pref-slot-Tue-evening" />Evening</label>
+              </div>
+              <div class="day-time-periods">
+                <label><input type="checkbox" id="hard-slot-Tue-morning" />Morning</label>
+                <label><input type="checkbox" id="hard-slot-Tue-afternoon" />Afternoon</label>
+                <label><input type="checkbox" id="hard-slot-Tue-evening" />Evening</label>
+              </div>
+
+              <div class="day-time-day">Wed</div>
+              <div><input type="checkbox" id="pref-day-Wed" /></div>
+              <div><input type="checkbox" id="hard-day-Wed" /></div>
+              <div class="day-time-periods">
+                <label><input type="checkbox" id="pref-slot-Wed-morning" />Morning</label>
+                <label><input type="checkbox" id="pref-slot-Wed-afternoon" />Afternoon</label>
+                <label><input type="checkbox" id="pref-slot-Wed-evening" />Evening</label>
+              </div>
+              <div class="day-time-periods">
+                <label><input type="checkbox" id="hard-slot-Wed-morning" />Morning</label>
+                <label><input type="checkbox" id="hard-slot-Wed-afternoon" />Afternoon</label>
+                <label><input type="checkbox" id="hard-slot-Wed-evening" />Evening</label>
+              </div>
+
+              <div class="day-time-day">Thu</div>
+              <div><input type="checkbox" id="pref-day-Thu" /></div>
+              <div><input type="checkbox" id="hard-day-Thu" /></div>
+              <div class="day-time-periods">
+                <label><input type="checkbox" id="pref-slot-Thu-morning" />Morning</label>
+                <label><input type="checkbox" id="pref-slot-Thu-afternoon" />Afternoon</label>
+                <label><input type="checkbox" id="pref-slot-Thu-evening" />Evening</label>
+              </div>
+              <div class="day-time-periods">
+                <label><input type="checkbox" id="hard-slot-Thu-morning" />Morning</label>
+                <label><input type="checkbox" id="hard-slot-Thu-afternoon" />Afternoon</label>
+                <label><input type="checkbox" id="hard-slot-Thu-evening" />Evening</label>
+              </div>
+
+              <div class="day-time-day">Fri</div>
+              <div><input type="checkbox" id="pref-day-Fri" /></div>
+              <div><input type="checkbox" id="hard-day-Fri" /></div>
+              <div class="day-time-periods">
+                <label><input type="checkbox" id="pref-slot-Fri-morning" />Morning</label>
+                <label><input type="checkbox" id="pref-slot-Fri-afternoon" />Afternoon</label>
+                <label><input type="checkbox" id="pref-slot-Fri-evening" />Evening</label>
+              </div>
+              <div class="day-time-periods">
+                <label><input type="checkbox" id="hard-slot-Fri-morning" />Morning</label>
+                <label><input type="checkbox" id="hard-slot-Fri-afternoon" />Afternoon</label>
+                <label><input type="checkbox" id="hard-slot-Fri-evening" />Evening</label>
+              </div>
             </div>
           </fieldset>
 
-          <fieldset>
-            <legend>Preferred periods (soft preference)</legend>
-            <div class="checkbox-grid">
-              <label class="checkbox-item"><input type="checkbox" name="formPreferredPeriods" value="morning" />Morning</label>
-              <label class="checkbox-item"><input type="checkbox" name="formPreferredPeriods" value="afternoon" />Afternoon</label>
-              <label class="checkbox-item"><input type="checkbox" name="formPreferredPeriods" value="evening" />Evening</label>
+          <div class="row slider-row">
+            <div class="slider-field">
+              <label for="formHorizon">
+                How many days ahead should we search?
+                <span id="formHorizonValue" class="slider-value">10 days</span>
+              </label>
+              <div class="slider-input-wrap">
+                <input id="formHorizon" type="range" min="1" max="30" step="1" value="10" list="horizonTicks" />
+                <span id="formHorizonThumbValue" class="slider-thumb-value">10</span>
+              </div>
+              <datalist id="horizonTicks">
+                <option value="1"></option>
+                <option value="7"></option>
+                <option value="14"></option>
+                <option value="21"></option>
+                <option value="30"></option>
+              </datalist>
+              <p class="hint slider-hint">Lower means a tighter search window. Higher checks further ahead.</p>
             </div>
-          </fieldset>
 
-          <fieldset>
-            <legend>Hard constraints: periods you cannot do</legend>
-            <div class="checkbox-grid">
-              <label class="checkbox-item"><input type="checkbox" name="formExcludedPeriods" value="morning" />Morning</label>
-              <label class="checkbox-item"><input type="checkbox" name="formExcludedPeriods" value="afternoon" />Afternoon</label>
-              <label class="checkbox-item"><input type="checkbox" name="formExcludedPeriods" value="evening" />Evening</label>
+            <div class="slider-field">
+              <label for="formSoonestWeight">
+                How important is getting the soonest appointment?
+                <span id="formSoonestWeightValue" class="slider-value">100</span>
+              </label>
+              <div class="slider-input-wrap">
+                <input id="formSoonestWeight" type="range" min="0" max="100" step="1" value="100" list="soonestTicks" />
+                <span id="formSoonestWeightThumbValue" class="slider-thumb-value">100</span>
+              </div>
+              <datalist id="soonestTicks">
+                <option value="0"></option>
+                <option value="25"></option>
+                <option value="50"></option>
+                <option value="75"></option>
+                <option value="100"></option>
+              </datalist>
+              <p class="hint slider-hint">0 ignores soonness. 100 strongly prioritises earliest slots.</p>
             </div>
-          </fieldset>
-
-          <fieldset>
-            <legend>Scoring importance profile (0-200)</legend>
-            <div class="row">
-              <label for="formWeightModality">Modality importance</label>
-              <input id="formWeightModality" type="number" min="0" max="200" value="100" />
-              <label for="formWeightDay">Day importance</label>
-              <input id="formWeightDay" type="number" min="0" max="200" value="100" />
-            </div>
-            <div class="row">
-              <label for="formWeightPeriod">Period importance</label>
-              <input id="formWeightPeriod" type="number" min="0" max="200" value="100" />
-              <label for="formWeightSynergy">Day+period synergy importance</label>
-              <input id="formWeightSynergy" type="number" min="0" max="200" value="100" />
-            </div>
-          </fieldset>
-
-          <div class="row">
-            <label for="formHorizon">Date horizon</label>
-            <input id="formHorizon" type="number" min="1" max="30" value="10" />
-
-            <label for="formSoonestWeight">Soonest weight</label>
-            <input id="formSoonestWeight" type="number" min="0" max="100" value="60" />
           </div>
-          <p class="hint">Soonest weight controls urgency in scoring: 0 ignores soonness, 100 strongly prefers earliest slots.</p>
-          <p class="hint">If you set both preferred days and preferred periods, the scorer adds an extra day+period synergy bonus.</p>
+          <p class="hint">Hard blocks always win. Day+time preferences feed slot scoring in a more precise way than global day/period picks.</p>
 
         </div>
 
@@ -141,6 +213,8 @@
       <pre id="adminRoute">No route response yet.</pre>
       <h3>Scheduling</h3>
       <pre id="adminScheduling">No scheduling responses yet.</pre>
+      <h3>Rota Timetable (Shared DB)</h3>
+      <pre id="adminRotaTimetable">Loading timetable...</pre>
       <h3>Slot Scores (Latest Round)</h3>
       <pre id="adminSlotScores">No slot scoring yet.</pre>
       <h3>Relaxation Trail</h3>

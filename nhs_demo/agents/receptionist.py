@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import urllib.error
+import urllib.request
 from typing import Any, Dict, List, Tuple
 
 from nhs_demo.config import DEFAULT_DATE_HORIZON_DAYS
@@ -56,6 +58,21 @@ class ReceptionistAgent:
     }
     MODALITIES = ["in_person", "phone", "video"]
     PERIODS = ["morning", "afternoon", "evening"]
+    IN_PERSON_ONLY_CATEGORIES = {"tests_monitoring"}
+    IN_PERSON_ONLY_KEYWORDS = ["blood test", "bp check", "blood pressure", "vaccination"]
+    QUESTION_ID_BY_FIELD: Dict[str, str] = {
+        "complaint_context": "complaint_context",
+        "modality": "preferred_modality",
+        "availability": "availability",
+        "availability_exclusion": "availability_exclusion",
+        "duration": "duration_text",
+    }
+    CANONICAL_PROMPTS: Dict[str, str] = {
+        "preferred_modality": "Do you prefer an in-person, phone, or video consultation?",
+    }
+
+    def __init__(self) -> None:
+        self._last_llm_error: str | None = None
 
     def build_intake(
         self,
@@ -75,14 +92,20 @@ class ReceptionistAgent:
                 preference_hint=preference_hint,
                 api_key=api_key,
                 llm_model=llm_model,
+                clarification_answers=clarification_answers,
             )
             if llm_result is None:
                 raise ValueError(
-                    "LLM extraction failed. Check API key/model or use Form-based mode."
+                    f"LLM extraction failed: {self._last_llm_error or 'unknown reason'}. "
+                    "Check API key/model or use Form-based mode."
                 )
             return llm_result[0], llm_result[1], "llm", llm_result[2]
 
-        intake, questions = self._build_intake_rule_from_text(run_id=run_id, merged_text=merged_text)
+        intake, questions = self._build_intake_rule_from_text(
+            run_id=run_id,
+            merged_text=merged_text,
+            clarification_answers=clarification_answers,
+        )
         return intake, questions, "rule", None
 
     def build_form_intake(
@@ -107,22 +130,30 @@ class ReceptionistAgent:
                 preference_hint=preferences,
                 api_key=api_key,
                 llm_model=llm_model,
+                clarification_answers=None,
             )
             if llm_result is None:
                 raise ValueError(
-                    "LLM extraction failed. Check API key/model or use Form-based mode."
+                    f"LLM extraction failed: {self._last_llm_error or 'unknown reason'}. "
+                    "Check API key/model or use Form-based mode."
                 )
             intake_llm, _questions, llm_payload = llm_result
             intake_llm = intake_llm.model_copy(update={"missing_fields": []})
             return intake_llm, [], "llm", llm_payload
 
+        complaint_category = self._extract_category(merged_text)
+        normalized_preferences = self._apply_service_modality_policy(
+            preferences,
+            complaint_category=complaint_category,
+            raw_text=merged_text,
+        )
         intake = IntakeSummary(
             run_id=run_id,
             raw_text=merged_text,
-            complaint_category=self._extract_category(merged_text),
+            complaint_category=complaint_category,
             duration_text=self._extract_duration(merged_text),
-            extracted_constraints_text=self._constraints_from_preferences(preferences),
-            preferences=preferences,
+            extracted_constraints_text=self._constraints_from_preferences(normalized_preferences),
+            preferences=normalized_preferences,
             missing_fields=[],
         )
         return intake, [], "rule", None
@@ -133,7 +164,7 @@ class ReceptionistAgent:
     ) -> List[RelaxationQuestion]:
         prompt_overrides = {
             "relax_excluded_periods": "Would you allow other times of day if needed?",
-            "relax_excluded_days": "Would you allow additional days if needed?",
+            "relax_excluded_days": "Would you allow additional days if needed? You can pick specific days.",
             "relax_excluded_modalities": "Would you allow additional consultation formats if needed?",
             "extend_date_horizon": "Would you allow us to search a few more days ahead?",
         }
@@ -154,15 +185,18 @@ class ReceptionistAgent:
         preference_hint: PatientPreferences | None,
         api_key: str | None,
         llm_model: str | None,
+        clarification_answers: Dict[str, str] | None = None,
     ) -> Tuple[IntakeSummary, List[ClarificationQuestion], Dict[str, Any]] | None:
+        self._last_llm_error = None
         effective_key = (api_key or os.getenv("OPENAI_API_KEY", "")).strip()
         if (not effective_key) or ("YOUR_OPENAI_API_KEY" in effective_key):
+            self._last_llm_error = "missing or placeholder OpenAI API key"
             return None
 
         try:
             from openai import OpenAI
         except Exception:
-            return None
+            OpenAI = None  # type: ignore[assignment]
 
         hint = preference_hint.model_dump(mode="json") if preference_hint else {}
         model = (llm_model or os.getenv("MAS_LLM_MODEL", "gpt-4o-mini")).strip()
@@ -180,54 +214,323 @@ class ReceptionistAgent:
             f"Text:\n{text}\n\n"
             f"Preference hint:\n{json.dumps(hint)}"
         )
+        request_input = [
+            {"role": "system", "content": "You are a strict JSON extractor."},
+            {"role": "user", "content": prompt},
+        ]
 
+        raw = ""
         try:
-            response = OpenAI(api_key=effective_key).responses.create(
-                model=model,
-                input=[
-                    {"role": "system", "content": "You are a strict JSON extractor."},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0,
-            )
-            raw = getattr(response, "output_text", "") or ""
-            cleaned = raw.strip()
-            cleaned = re.sub(r"^```json", "", cleaned, flags=re.IGNORECASE).strip()
-            cleaned = re.sub(r"```$", "", cleaned).strip()
-            payload = json.loads(cleaned)
+            if OpenAI is not None:
+                response = OpenAI(api_key=effective_key).responses.create(
+                    model=model,
+                    input=request_input,
+                    temperature=0,
+                )
+                raw = getattr(response, "output_text", "") or ""
+                if not raw.strip():
+                    raw = self._extract_output_text_from_http_payload(
+                        self._coerce_response_to_dict(response)
+                    )
+            else:
+                raw = self._call_openai_responses_http(
+                    api_key=effective_key,
+                    model=model,
+                    request_input=request_input,
+                ) or ""
+
+            if not raw.strip():
+                self._last_llm_error = "LLM response did not include output text"
+                return None
+
+            payload = self._extract_json_payload(raw)
+            if payload is None:
+                self._last_llm_error = "LLM response was not valid JSON payload"
+                return None
 
             rule_preferences = self._extract_preferences(text)
+            complaint_category = self._normalize_text_value(
+                payload.get("complaint_category"),
+                fallback="general_query",
+            )
             preferences = self._coerce_llm_preferences(
                 payload=payload,
                 text=text,
                 rule_preferences=rule_preferences,
                 preference_hint=preference_hint,
             )
-            questions = [
-                ClarificationQuestion(**item)
-                for item in payload.get("clarification_questions", [])[:2]
-            ]
+            preferences = self._apply_service_modality_policy(
+                preferences,
+                complaint_category=complaint_category,
+                raw_text=text,
+            )
+            questions = self._parse_clarification_questions(payload.get("clarification_questions", []))
+            llm_missing_fields = self._parse_missing_fields(payload.get("missing_fields", []))
+            inferred_missing_fields = self._missing_fields_from_preferences(
+                preferences,
+                complaint_category=complaint_category,
+                raw_text=text,
+            )
+            if complaint_category == "general_query":
+                inferred_missing_fields.append("complaint_context")
+            merged_missing_fields = self._merge_unique_fields(
+                llm_missing_fields,
+                inferred_missing_fields,
+            )
+            answered_question_ids = self._answered_clarification_ids(clarification_answers)
+            questions = [q for q in questions if q.question_id not in answered_question_ids]
+            has_user_clarification = bool(
+                clarification_answers and any(value.strip() for value in clarification_answers.values())
+            )
+            fallback_questions = self._clarification_questions_from_missing(
+                merged_missing_fields,
+                answered_question_ids=answered_question_ids,
+                existing_question_ids={q.question_id for q in questions},
+            )
+            questions = (questions + fallback_questions)[:2]
+            if has_user_clarification and all(q.question_id in answered_question_ids for q in questions):
+                questions = []
 
             intake = IntakeSummary(
                 run_id=run_id,
                 raw_text=text,
-                complaint_category=str(payload.get("complaint_category", "general_query")),
-                duration_text=payload.get("duration_text"),
+                complaint_category=complaint_category,
+                duration_text=self._normalize_text_value(payload.get("duration_text"), fallback=""),
                 extracted_constraints_text=self._normalize_constraints(payload),
                 preferences=preferences,
-                missing_fields=[str(item) for item in payload.get("missing_fields", [])],
+                missing_fields=merged_missing_fields,
             )
-            return intake, questions, payload
-        except Exception:
+            return intake, questions, self._build_normalized_llm_payload(intake, questions, payload)
+        except Exception as exc:
+            self._last_llm_error = str(exc)
             return None
+
+    def _coerce_response_to_dict(self, response: Any) -> Dict[str, Any]:
+        if hasattr(response, "model_dump"):
+            dumped = response.model_dump()
+            if isinstance(dumped, dict):
+                return dumped
+        if hasattr(response, "to_json"):
+            try:
+                parsed = json.loads(response.to_json())
+                if isinstance(parsed, dict):
+                    return parsed
+            except Exception:
+                return {}
+        return {}
+
+    def _extract_json_payload(self, raw: str) -> Dict[str, Any] | None:
+        cleaned = raw.strip()
+        cleaned = re.sub(r"^```json", "", cleaned, flags=re.IGNORECASE).strip()
+        cleaned = re.sub(r"```$", "", cleaned).strip()
+
+        try:
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+
+        for candidate in self._json_object_candidates(cleaned):
+            try:
+                parsed = json.loads(candidate)
+                if isinstance(parsed, dict):
+                    return parsed
+            except Exception:
+                continue
+        return None
+
+    def _json_object_candidates(self, text: str) -> List[str]:
+        candidates: List[str] = []
+        start = -1
+        depth = 0
+        in_string = False
+        escaping = False
+
+        for idx, char in enumerate(text):
+            if in_string:
+                if escaping:
+                    escaping = False
+                    continue
+                if char == "\\":
+                    escaping = True
+                    continue
+                if char == '"':
+                    in_string = False
+                continue
+
+            if char == '"':
+                in_string = True
+                continue
+
+            if char == "{":
+                if depth == 0:
+                    start = idx
+                depth += 1
+                continue
+
+            if char == "}":
+                if depth == 0:
+                    continue
+                depth -= 1
+                if depth == 0 and start >= 0:
+                    candidates.append(text[start : idx + 1])
+
+        return candidates
+
+    def _parse_clarification_questions(self, raw: Any) -> List[ClarificationQuestion]:
+        if not isinstance(raw, list):
+            return []
+
+        questions: List[ClarificationQuestion] = []
+        for idx, item in enumerate(raw):
+            if len(questions) >= 2:
+                break
+
+            if isinstance(item, dict):
+                prompt = str(item.get("prompt", "")).strip()
+                question_id = str(item.get("question_id", "")).strip()
+            else:
+                prompt = str(item).strip()
+                question_id = ""
+
+            if not prompt:
+                continue
+            inferred = self._infer_question_id_from_prompt(prompt)
+            if not question_id or re.match(r"^q_\d+$", question_id):
+                question_id = inferred or f"q_{idx + 1}"
+            prompt = self._canonical_prompt(question_id, prompt)
+            questions.append(ClarificationQuestion(question_id=question_id, prompt=prompt))
+
+        return questions
+
+    def _infer_question_id_from_prompt(self, prompt: str) -> str | None:
+        lowered = self._normalize_text_for_parsing(prompt.lower())
+        if any(token in lowered for token in ["avoid", "cannot", "can't", "cant", "unavailable", "not available"]):
+            if any(token in lowered for token in ["day", "days", "time", "times", "morning", "afternoon", "evening"]):
+                return "availability_exclusion"
+        if any(token in lowered for token in ["in-person", "in person", "phone", "video", "modality"]):
+            return "preferred_modality"
+        if any(token in lowered for token in ["day", "days", "time", "times", "availability", "morning", "afternoon", "evening"]):
+            return "availability"
+        if any(token in lowered for token in ["how long", "duration", "how many days", "how many weeks"]):
+            return "duration_text"
+        if any(token in lowered for token in ["what is this about", "appointment about", "main concern"]):
+            return "complaint_context"
+        return None
+
+    def _parse_missing_fields(self, raw: Any) -> List[str]:
+        if not isinstance(raw, list):
+            return []
+        parsed = [str(item).strip() for item in raw if str(item).strip()]
+        return self._merge_unique_fields(parsed)
+
+    def _answered_clarification_ids(self, clarification_answers: Dict[str, str] | None) -> set[str]:
+        if not clarification_answers:
+            return set()
+        return {
+            key.strip()
+            for key, value in clarification_answers.items()
+            if key.strip() and value.strip()
+        }
+
+    def _merge_unique_fields(self, *groups: List[str]) -> List[str]:
+        ordered: List[str] = []
+        seen: set[str] = set()
+        for group in groups:
+            for item in group:
+                if item in seen:
+                    continue
+                seen.add(item)
+                ordered.append(item)
+        return ordered
+
+    def _build_normalized_llm_payload(
+        self,
+        intake: IntakeSummary,
+        questions: List[ClarificationQuestion],
+        raw_payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        return {
+            "complaint_category": intake.complaint_category,
+            "duration_text": intake.duration_text or "",
+            "extracted_constraints_text": intake.extracted_constraints_text,
+            "preferences": intake.preferences.model_dump(mode="json"),
+            "missing_fields": intake.missing_fields,
+            "clarification_questions": [item.model_dump(mode="json") for item in questions],
+            "raw_llm_output": raw_payload,
+        }
+
+    def _call_openai_responses_http(
+        self,
+        api_key: str,
+        model: str,
+        request_input: List[Dict[str, str]],
+    ) -> str | None:
+        request_body = {
+            "model": model,
+            "input": request_input,
+            "temperature": 0,
+        }
+        request = urllib.request.Request(
+            "https://api.openai.com/v1/responses",
+            data=json.dumps(request_body).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            return self._extract_output_text_from_http_payload(payload)
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError):
+            return None
+
+    def _extract_output_text_from_http_payload(self, payload: Dict[str, Any]) -> str:
+        output_text = payload.get("output_text")
+        if isinstance(output_text, str) and output_text.strip():
+            return output_text
+
+        parts: List[str] = []
+        output_items = payload.get("output", [])
+        if not isinstance(output_items, list):
+            return ""
+
+        for item in output_items:
+            if not isinstance(item, dict):
+                continue
+            content = item.get("content", [])
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") in {"output_text", "text"}:
+                    text = block.get("text")
+                    if isinstance(text, str) and text.strip():
+                        parts.append(text)
+
+        return "\n".join(parts).strip()
 
     def _normalize_constraints(self, payload: Dict[str, Any]) -> List[str]:
         raw = payload.get("extracted_constraints_text", [])
         if isinstance(raw, str):
-            return [raw]
+            cleaned = raw.strip()
+            return [cleaned] if cleaned else []
         if isinstance(raw, list):
-            return [str(item) for item in raw]
+            return [str(item).strip() for item in raw if str(item).strip()]
         return []
+
+    def _normalize_text_value(self, raw: Any, fallback: str) -> str:
+        if raw is None:
+            return fallback
+        value = str(raw).strip()
+        if not value or value.lower() in {"none", "null", "n/a"}:
+            return fallback
+        return value
 
     def _coerce_llm_preferences(
         self,
@@ -459,12 +762,19 @@ class ReceptionistAgent:
         items = self._listify(raw)
         result: List[str] = []
         for item in items:
-            token = item.lower().strip()
+            token = self._normalize_text_for_parsing(item.lower().strip())
             if "phone" in token or "call" in token:
                 result.append("phone")
             elif "video" in token or "zoom" in token or "teams" in token:
                 result.append("video")
-            elif "in person" in token or "in_person" in token or "face" in token or "f2f" in token:
+            elif (
+                "in person" in token
+                or "in_person" in token
+                or "inperson" in token
+                or token == "person"
+                or "face" in token
+                or "f2f" in token
+            ):
                 result.append("in_person")
         return sorted(set(result))
 
@@ -512,14 +822,31 @@ class ReceptionistAgent:
         self,
         run_id: str,
         merged_text: str,
+        clarification_answers: Dict[str, str] | None = None,
     ) -> Tuple[IntakeSummary, List[ClarificationQuestion]]:
         complaint_category = self._extract_category(merged_text)
         duration_text = self._extract_duration(merged_text)
         preferences = self._extract_preferences(merged_text)
+        preferences = self._apply_service_modality_policy(
+            preferences,
+            complaint_category=complaint_category,
+            raw_text=merged_text,
+        )
         constraints = self._extract_constraints_text(merged_text)
 
-        missing_fields = self._missing_fields_from_preferences(preferences)
-        questions = self._clarification_questions_from_missing(missing_fields)
+        missing_fields = self._missing_fields_from_preferences(
+            preferences,
+            complaint_category=complaint_category,
+            raw_text=merged_text,
+        )
+        if complaint_category == "general_query":
+            missing_fields = self._merge_unique_fields(["complaint_context"], missing_fields)
+        answered_question_ids = self._answered_clarification_ids(clarification_answers)
+        questions = self._clarification_questions_from_missing(
+            missing_fields,
+            answered_question_ids=answered_question_ids,
+            existing_question_ids=set(),
+        )
 
         intake = IntakeSummary(
             run_id=run_id,
@@ -532,10 +859,16 @@ class ReceptionistAgent:
         )
         return intake, questions
 
-    def _missing_fields_from_preferences(self, preferences: PatientPreferences) -> List[str]:
+    def _missing_fields_from_preferences(
+        self,
+        preferences: PatientPreferences,
+        complaint_category: str | None = None,
+        raw_text: str = "",
+    ) -> List[str]:
         missing_fields: List[str] = []
 
-        if not preferences.preferred_modalities and not preferences.excluded_modalities:
+        in_person_only = self._is_in_person_only_context(complaint_category, raw_text)
+        if not in_person_only and not preferences.preferred_modalities and not preferences.excluded_modalities:
             missing_fields.append("modality")
 
         has_availability_signal = any(
@@ -553,31 +886,100 @@ class ReceptionistAgent:
 
         return missing_fields
 
+    def _apply_service_modality_policy(
+        self,
+        preferences: PatientPreferences,
+        complaint_category: str | None,
+        raw_text: str,
+    ) -> PatientPreferences:
+        if not self._is_in_person_only_context(complaint_category, raw_text):
+            return preferences
+        return preferences.model_copy(
+            update={
+                "preferred_modalities": ["in_person"],
+                "excluded_modalities": ["phone", "video"],
+            }
+        )
+
+    def _is_in_person_only_context(self, complaint_category: str | None, raw_text: str) -> bool:
+        if complaint_category in self.IN_PERSON_ONLY_CATEGORIES:
+            return True
+        lowered = self._normalize_text_for_parsing(raw_text.lower())
+        return any(keyword in lowered for keyword in self.IN_PERSON_ONLY_KEYWORDS)
+
     def _clarification_questions_from_missing(
         self,
         missing_fields: List[str],
+        answered_question_ids: set[str] | None = None,
+        existing_question_ids: set[str] | None = None,
     ) -> List[ClarificationQuestion]:
+        answered = answered_question_ids or set()
+        existing = existing_question_ids or set()
         questions: List[ClarificationQuestion] = []
-        if "modality" in missing_fields:
-            questions.append(
-                ClarificationQuestion(
-                    question_id="preferred_modality",
-                    prompt="Do you prefer in-person, phone, or video?",
-                )
-            )
-        if "availability" in missing_fields:
-            questions.append(
-                ClarificationQuestion(
-                    question_id="availability",
-                    prompt="Any preferred days or times, or times to avoid?",
-                )
-            )
+
+        for field in missing_fields:
+            question = self._question_for_missing_field(field)
+            if question is None:
+                continue
+            if question.question_id in answered or question.question_id in existing:
+                continue
+            questions.append(question)
+            if len(questions) == 2:
+                break
+
         return questions[:2]
+
+    def _question_for_missing_field(self, field: str) -> ClarificationQuestion | None:
+        if field == "complaint_context":
+            return ClarificationQuestion(
+                question_id=self.QUESTION_ID_BY_FIELD[field],
+                prompt="Could you briefly tell me what this appointment is about?",
+            )
+        if field == "modality":
+            return ClarificationQuestion(
+                question_id=self.QUESTION_ID_BY_FIELD[field],
+                prompt=self.CANONICAL_PROMPTS["preferred_modality"],
+            )
+        if field == "availability":
+            return ClarificationQuestion(
+                question_id=self.QUESTION_ID_BY_FIELD[field],
+                prompt="What days or times work best, and are there any you cannot do?",
+            )
+        if field == "duration":
+            return ClarificationQuestion(
+                question_id=self.QUESTION_ID_BY_FIELD[field],
+                prompt="How long has this been going on?",
+            )
+        return None
+
+    def _canonical_prompt(self, question_id: str, prompt: str) -> str:
+        return self.CANONICAL_PROMPTS.get(question_id, prompt)
 
     def _merge_text_with_clarifications(self, user_text: str, clarifications: Dict[str, str]) -> str:
         if not clarifications:
             return user_text
-        ordered = [f"{key}: {value}" for key, value in sorted(clarifications.items()) if value.strip()]
+        ordered: List[str] = []
+        for key, value in sorted(clarifications.items()):
+            cleaned_value = value.strip()
+            if not cleaned_value:
+                continue
+            normalized_key = key.strip()
+            lowered_value = self._normalize_text_for_parsing(cleaned_value.lower())
+            has_negation = any(
+                token in lowered_value for token in [" no ", " not ", " avoid ", " cannot ", " unavailable "]
+            ) or lowered_value.startswith(("no ", "not ", "avoid ", "cannot ", "unavailable "))
+
+            if normalized_key == "availability_exclusion":
+                if has_negation:
+                    ordered.append(cleaned_value)
+                else:
+                    ordered.append(f"avoid {cleaned_value}")
+                continue
+
+            if re.match(r"^q_\d+$", key.strip()):
+                ordered.append(cleaned_value)
+            else:
+                ordered.append(f"{key}: {cleaned_value}")
         return f"{user_text} {' '.join(ordered)}".strip()
 
     def _compose_form_text(

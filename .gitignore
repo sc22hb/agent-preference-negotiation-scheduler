@@ -3,9 +3,11 @@ progress_log.txt
 implementation.txt
 lit.txt
 zaman.pdf
+work_completed.txt
 report.txt
 *.pyc
 .env
 .venv/
 README.md
 tests/
+progress.txt

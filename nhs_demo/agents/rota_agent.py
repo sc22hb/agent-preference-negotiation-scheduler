@@ -78,6 +78,48 @@ class RotaAgent:
             if template.start_time < horizon_end
         ]
 
+    def generate_scaled_slots(self, routing: RoutingDecision, total_slots: int) -> List[Slot]:
+        """Build a deterministic synthetic slot pool of an exact size for experiments."""
+        if total_slots <= 0:
+            return []
+
+        templates = self._templates_for_service(routing.service_type)
+        if not templates:
+            return []
+
+        slots: List[Slot] = []
+        service_prefix = self._service_prefix(routing.service_type)
+        day_offset = 0
+
+        while len(slots) < total_slots:
+            day_start = self.base_datetime + timedelta(days=day_offset)
+            day_offset += 1
+            if day_start.weekday() >= 5:
+                continue
+
+            for template_index, (hour, minute, modality, clinician_suffix) in enumerate(templates, start=1):
+                slot_start = day_start.replace(hour=hour, minute=minute)
+                slot_number = len(slots) + 1
+                slots.append(
+                    Slot(
+                        slot_id=(
+                            f"{service_prefix}-SCALE-"
+                            f"{slot_start.strftime('%Y%m%d-%H%M')}-"
+                            f"{template_index:02d}-{slot_number:04d}"
+                        ),
+                        service_type=routing.service_type,
+                        clinician_id=f"{service_prefix}-{clinician_suffix}",
+                        site=self.HOSPITAL_NAME,
+                        modality=modality,
+                        start_time=slot_start,
+                        duration_minutes=routing.appointment_length_minutes,
+                    )
+                )
+                if len(slots) >= total_slots:
+                    break
+
+        return slots
+
     def _build_slot_database(self) -> Dict[str, List[_SlotTemplate]]:
         self._database_build_count += 1
         database: Dict[str, List[_SlotTemplate]] = {}

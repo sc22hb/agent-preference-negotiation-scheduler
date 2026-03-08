@@ -22,7 +22,7 @@ class ReceptionistAgent:
     """Extract a structured non-diagnostic intake summary from conversation or form input."""
 
     CATEGORY_KEYWORDS: Dict[str, List[str]] = {
-        "prescription_admin": ["prescription", "refill", "medication"],
+        "prescription_admin": ["prescription", "refill", "medication", "med review", "repeat meds"],
         "respiratory": ["cough", "asthma", "wheeze", "breath"],
         "urinary": ["uti", "urinary", "urine"],
         "skin": ["rash", "skin"],
@@ -60,6 +60,78 @@ class ReceptionistAgent:
     PERIODS = ["morning", "afternoon", "evening"]
     IN_PERSON_ONLY_CATEGORIES = {"tests_monitoring"}
     IN_PERSON_ONLY_KEYWORDS = ["blood test", "bp check", "blood pressure", "vaccination"]
+    CATEGORY_ALIASES: Dict[str, List[str]] = {
+        "prescription_admin": [
+            "prescription_admin",
+            "prescription",
+            "repeat prescription",
+            "medication refill",
+            "med review",
+            "medication review",
+            "repeat meds",
+            "refill",
+        ],
+        "respiratory": [
+            "respiratory",
+            "persistent cough",
+            "cough",
+            "asthma",
+            "wheeze",
+            "wheezing",
+            "breath",
+            "breathing",
+        ],
+        "urinary": [
+            "urinary",
+            "uti",
+            "uti problems",
+            "uti symptoms",
+            "urine",
+            "urinary symptoms",
+        ],
+        "tests_monitoring": [
+            "tests_monitoring",
+            "blood test",
+            "monitoring bloods",
+            "monitoring",
+            "bp check",
+            "blood pressure",
+            "vaccination",
+        ],
+        "administrative": [
+            "administrative",
+            "admin",
+            "fit note",
+            "letter",
+            "certificate",
+            "sick note",
+        ],
+        "general_review": [
+            "general_review",
+            "general review",
+            "routine gp",
+            "gp review",
+            "routine review",
+            "routine check",
+            "review",
+        ],
+    }
+    NUMBER_WORDS: Dict[str, int] = {
+        "one": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "nine": 9,
+        "ten": 10,
+        "eleven": 11,
+        "twelve": 12,
+        "thirteen": 13,
+        "fourteen": 14,
+    }
     QUESTION_ID_BY_FIELD: Dict[str, str] = {
         "complaint_context": "complaint_context",
         "modality": "preferred_modality",
@@ -222,7 +294,7 @@ class ReceptionistAgent:
         raw = ""
         try:
             if OpenAI is not None:
-                response = OpenAI(api_key=effective_key).responses.create(
+                response = OpenAI(api_key=effective_key, timeout=30.0, max_retries=1).responses.create(
                     model=model,
                     input=request_input,
                     temperature=0,
@@ -249,9 +321,9 @@ class ReceptionistAgent:
                 return None
 
             rule_preferences = self._extract_preferences(text)
-            complaint_category = self._normalize_text_value(
+            complaint_category = self._canonicalize_complaint_category(
                 payload.get("complaint_category"),
-                fallback="general_query",
+                text=text,
             )
             preferences = self._coerce_llm_preferences(
                 payload=payload,
@@ -295,7 +367,10 @@ class ReceptionistAgent:
                 run_id=run_id,
                 raw_text=text,
                 complaint_category=complaint_category,
-                duration_text=self._normalize_text_value(payload.get("duration_text"), fallback=""),
+                duration_text=self._canonicalize_duration_text(
+                    payload.get("duration_text"),
+                    text=text,
+                ),
                 extracted_constraints_text=self._normalize_constraints(payload),
                 preferences=preferences,
                 missing_fields=merged_missing_fields,
@@ -486,7 +561,21 @@ class ReceptionistAgent:
             with urllib.request.urlopen(request, timeout=30) as response:
                 payload = json.loads(response.read().decode("utf-8"))
             return self._extract_output_text_from_http_payload(payload)
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError):
+        except urllib.error.HTTPError as exc:
+            try:
+                detail = exc.read().decode("utf-8", errors="replace").strip()
+            except Exception:
+                detail = ""
+            self._last_llm_error = f"HTTP {exc.code}{': ' + detail if detail else ''}"
+            return None
+        except urllib.error.URLError as exc:
+            self._last_llm_error = f"Connection error: {exc.reason}"
+            return None
+        except TimeoutError:
+            self._last_llm_error = "Connection timed out"
+            return None
+        except json.JSONDecodeError as exc:
+            self._last_llm_error = f"Invalid JSON response: {exc}"
             return None
 
     def _extract_output_text_from_http_payload(self, payload: Dict[str, Any]) -> str:
@@ -626,7 +715,11 @@ class ReceptionistAgent:
             preference_hint.weight_profile if preference_hint else PreferenceWeightProfile()
         )
 
-        date_horizon = pref_payload.get("date_horizon_days", hint_horizon)
+        deterministic_horizon = self._extract_date_horizon_days(text)
+        date_horizon = pref_payload.get(
+            "date_horizon_days",
+            deterministic_horizon if deterministic_horizon is not None else hint_horizon,
+        )
         soonest_weight = pref_payload.get("soonest_weight", hint_soonest)
         weight_profile = self._extract_weight_profile(
             pref_payload.get("weight_profile", {}),
@@ -637,7 +730,7 @@ class ReceptionistAgent:
         try:
             date_horizon = int(date_horizon)
         except Exception:
-            date_horizon = hint_horizon
+            date_horizon = deterministic_horizon if deterministic_horizon is not None else hint_horizon
         try:
             soonest_weight = int(soonest_weight)
         except Exception:
@@ -1030,19 +1123,112 @@ class ReceptionistAgent:
         return constraints
 
     def _extract_category(self, text: str) -> str:
-        lowered = text.lower()
+        lowered = self._normalize_text_for_parsing(text.lower())
         for category, keywords in self.CATEGORY_KEYWORDS.items():
-            if any(keyword in lowered for keyword in keywords):
+            if any(re.search(rf"\b{re.escape(keyword)}\b", lowered) for keyword in keywords):
                 return category
-        return "general_query"
+        return "general_review" if any(token in lowered for token in ["review", "gp", "routine check"]) else "general_query"
 
     def _extract_duration(self, text: str) -> str | None:
-        match = re.search(r"\b(\d+)\s*(day|days|week|weeks|month|months)\b", text.lower())
+        lowered = text.lower()
+        match = re.search(r"\b(\d+)\s*(day|days|week|weeks|month|months)\b", lowered)
         if match:
             return f"{match.group(1)} {match.group(2)}"
-        if "since yesterday" in text.lower():
+        word_pattern = "|".join(self.NUMBER_WORDS.keys())
+        match = re.search(rf"\b({word_pattern})\s*(day|days|week|weeks|month|months)\b", lowered)
+        if match:
+            return f"{self.NUMBER_WORDS[match.group(1)]} {match.group(2)}"
+        if "since yesterday" in lowered:
             return "since yesterday"
         return None
+
+    def _canonicalize_complaint_category(self, raw_value: Any, text: str) -> str:
+        inferred_from_text = self._extract_category(text)
+        if inferred_from_text != "general_query":
+            return inferred_from_text
+
+        raw_text = self._normalize_text_value(raw_value, fallback="")
+        normalized_raw = self._normalize_text_for_parsing(raw_text.lower())
+        for category, aliases in self.CATEGORY_ALIASES.items():
+            if any(alias in normalized_raw for alias in aliases):
+                return category
+
+        return "general_review" if "review" in self._normalize_text_for_parsing(text.lower()) else "general_query"
+
+    def _canonicalize_duration_text(self, raw_value: Any, text: str) -> str:
+        normalized_text = self._normalize_text_for_parsing(text.lower())
+        deterministic_duration = self._extract_duration(text)
+        if deterministic_duration and not self._looks_like_horizon_phrase(normalized_text):
+            return deterministic_duration
+
+        raw_text = self._normalize_text_value(raw_value, fallback="")
+        normalized_raw = self._normalize_text_for_parsing(raw_text.lower())
+        if not normalized_raw:
+            return ""
+
+        if self._looks_like_horizon_phrase(normalized_raw):
+            return ""
+        return raw_text
+
+    def _extract_date_horizon_days(self, text: str) -> int | None:
+        lowered = self._normalize_text_for_parsing(text.lower())
+
+        patterns = [
+            r"\bwithin the next (\d+)\s+days?\b",
+            r"\bwithin (\d+)\s+days?\b",
+            r"\bin the next (\d+)\s+days?\b",
+            r"\bnothing beyond (\d+)\s+days?\b",
+            r"\b(\d+)\s+day(?:s)?\s+(?:max|maximum|tops|limit|window)\b",
+            r"\bwithin the next (\d+)\s+weeks?\b",
+            r"\bwithin (\d+)\s+weeks?\b",
+            r"\bin the next (\d+)\s+weeks?\b",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, lowered)
+            if not match:
+                continue
+            value = int(match.group(1))
+            if "week" in pattern:
+                value *= 7
+            return max(1, min(30, value))
+
+        word_pattern = "|".join(self.NUMBER_WORDS.keys())
+        word_patterns = [
+            rf"\bwithin the next ({word_pattern})\s+days?\b",
+            rf"\bwithin ({word_pattern})\s+days?\b",
+            rf"\bin the next ({word_pattern})\s+days?\b",
+            rf"\bnothing beyond ({word_pattern})\s+days?\b",
+            rf"\bwithin the next ({word_pattern})\s+weeks?\b",
+            rf"\bwithin ({word_pattern})\s+weeks?\b",
+            rf"\bin the next ({word_pattern})\s+weeks?\b",
+        ]
+        for pattern in word_patterns:
+            match = re.search(pattern, lowered)
+            if not match:
+                continue
+            value = self.NUMBER_WORDS[match.group(1)]
+            if "week" in pattern:
+                value *= 7
+            return max(1, min(30, value))
+
+        if "next week" in lowered or "this week" in lowered:
+            return 7
+        return None
+
+    def _looks_like_horizon_phrase(self, normalized_text: str) -> bool:
+        horizon_markers = [
+            "within the next",
+            "within",
+            "next week",
+            "this week",
+            "nothing beyond",
+            "days please",
+            "days max",
+            "days tops",
+            "day window",
+            "day limit",
+        ]
+        return any(marker in normalized_text for marker in horizon_markers)
 
     def _extract_constraints_text(self, text: str) -> List[str]:
         lowered = text.lower()

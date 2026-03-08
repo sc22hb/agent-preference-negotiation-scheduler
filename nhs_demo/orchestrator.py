@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 from uuid import uuid4
 
@@ -19,9 +19,13 @@ from nhs_demo.schemas import (
     IntakeRequest,
     IntakeRefineRequest,
     IntakeResponse,
+    IntakeSummary,
     RouteRequest,
+    RoutingDecision,
     RouteResponse,
     RunState,
+    SafetyGateResult,
+    Slot,
     SlotScore,
     ScheduleOfferRequest,
     ScheduleOfferResponse,
@@ -180,7 +184,36 @@ class DemoOrchestrator:
 
         return RouteResponse(run_id=run.run_id, routing_decision=routing_decision)
 
+    def create_structured_run(
+        self,
+        intake_summary: IntakeSummary,
+        routing_decision: RoutingDecision | None = None,
+        safety: SafetyGateResult | None = None,
+    ) -> str:
+        """Register a run from already-validated structured intake for experiments/tests."""
+        run = self._create_run()
+        run.safety = safety or SafetyGateResult(triggered=False)
+        run.intake_summary = intake_summary.model_copy(update={"run_id": run.run_id})
+        run.current_preferences = run.intake_summary.preferences
+        if routing_decision is not None:
+            run.routing_decision = routing_decision.model_copy(update={"run_id": run.run_id})
+        self._save_run(run)
+        return run.run_id
+
     def offer(self, payload: ScheduleOfferRequest) -> ScheduleOfferResponse:
+        candidate_horizon = max(
+            payload.preferences.date_horizon_days + DATE_RANGE_EXTENSION_DAYS,
+            DEFAULT_DATE_HORIZON_DAYS + DATE_RANGE_EXTENSION_DAYS,
+        )
+        candidate_slots = self.rota_agent.generate_slots(payload.routing_decision, candidate_horizon)
+        return self.offer_with_candidate_slots(payload, candidate_slots)
+
+    def offer_with_candidate_slots(
+        self,
+        payload: ScheduleOfferRequest,
+        candidate_slots: List[Slot],
+    ) -> ScheduleOfferResponse:
+        """Use the normal offer logic against a caller-provided deterministic slot pool."""
         run = self._get_run(payload.run_id)
         if run.safety.triggered:
             run.status = "safety_escalation"
@@ -197,11 +230,6 @@ class DemoOrchestrator:
         run.current_preferences = payload.preferences
         run.round_number += 1
 
-        candidate_horizon = max(
-            payload.preferences.date_horizon_days + DATE_RANGE_EXTENSION_DAYS,
-            DEFAULT_DATE_HORIZON_DAYS + DATE_RANGE_EXTENSION_DAYS,
-        )
-        candidate_slots = self.rota_agent.generate_slots(payload.routing_decision, candidate_horizon)
         allocation = self.allocator_agent.allocate(
             routing=payload.routing_decision,
             preferences=payload.preferences,
@@ -464,7 +492,7 @@ class DemoOrchestrator:
         return self._runs[run_id]
 
     def _save_run(self, run: RunState) -> None:
-        run.updated_at = datetime.utcnow()
+        run.updated_at = datetime.now(timezone.utc)
         self._runs[run.run_id] = run
 
     def _build_slot_scores(

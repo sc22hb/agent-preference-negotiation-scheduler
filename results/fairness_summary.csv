@@ -1,0 +1,3 @@
+group_tag,total_profiles,successful_profiles,success_rate_pct,success_rate_ci_lower,success_rate_ci_upper,mean_utility_successes,median_utility_successes,p75_utility_successes,cohens_d_utility
+A,36,29,80.56,66.67,91.67,104.913,108.2,115.07,1.6543
+B,36,36,100.0,100.0,100.0,73.679,77.39,78.341,1.6543

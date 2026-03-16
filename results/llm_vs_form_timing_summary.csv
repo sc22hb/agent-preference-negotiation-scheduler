@@ -1,0 +1,3 @@
+mode,total_stories,successful_llm_calls,mean_form_latency_ms,mean_llm_latency_ms,median_llm_latency_ms,p95_llm_latency_ms,mean_exact_rate_pct,mean_semantic_rate_pct,complete_story_exact_rate_pct
+raw,50,50,0.469,6747.557,6356.764,9927.479,64.55,66.55,0.0
+canonicalized,50,50,0.367,7820.002,7541.9,10674.048,84.37,85.46,12.0

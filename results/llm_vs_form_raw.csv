@@ -1,0 +1,551 @@
+story_id,field_name,llm_value,form_value,match_category
+llm_story_01,complaint_category,Healthcare,prescription_admin,mismatch
+llm_story_01,duration_text,within the next 7 days,,mismatch
+llm_story_01,preferred_modalities,"[""phone""]","[""phone""]",exact
+llm_story_01,excluded_modalities,[],[],exact
+llm_story_01,preferred_days,"[""Thu""]","[""Thu""]",exact
+llm_story_01,excluded_days,[],[],exact
+llm_story_01,preferred_periods,"[""afternoon""]","[""afternoon""]",exact
+llm_story_01,excluded_periods,[],[],exact
+llm_story_01,preferred_day_periods,"[""{\""day\"": \""Thu\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Thu\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_01,excluded_day_periods,[],[],exact
+llm_story_01,date_horizon_days,10,7,mismatch
+llm_story_02,complaint_category,medical,tests_monitoring,mismatch
+llm_story_02,duration_text,next week,,mismatch
+llm_story_02,preferred_modalities,"[""in_person""]","[""in_person""]",exact
+llm_story_02,excluded_modalities,"[""phone"", ""video""]","[""phone"", ""video""]",exact
+llm_story_02,preferred_days,[],[],exact
+llm_story_02,excluded_days,[],[],exact
+llm_story_02,preferred_periods,[],"[""morning""]",mismatch
+llm_story_02,excluded_periods,[],[],exact
+llm_story_02,preferred_day_periods,[],[],exact
+llm_story_02,excluded_day_periods,[],[],exact
+llm_story_02,date_horizon_days,10,10,exact
+llm_story_03,complaint_category,respiratory,respiratory,exact
+llm_story_03,duration_text,about two weeks,,mismatch
+llm_story_03,preferred_modalities,"[""video""]","[""video""]",exact
+llm_story_03,excluded_modalities,[],[],exact
+llm_story_03,preferred_days,"[""Wed""]","[""Wed""]",exact
+llm_story_03,excluded_days,[],[],exact
+llm_story_03,preferred_periods,"[""morning""]","[""morning""]",exact
+llm_story_03,excluded_periods,[],[],exact
+llm_story_03,preferred_day_periods,"[""{\""day\"": \""Wed\"", \""period\"": \""morning\""}""]","[""{\""day\"": \""Wed\"", \""period\"": \""morning\""}""]",exact
+llm_story_03,excluded_day_periods,[],[],exact
+llm_story_03,date_horizon_days,10,10,exact
+llm_story_04,complaint_category,general,administrative,mismatch
+llm_story_04,duration_text,within 5 days,,mismatch
+llm_story_04,preferred_modalities,[],"[""phone"", ""video""]",mismatch
+llm_story_04,excluded_modalities,[],[],exact
+llm_story_04,preferred_days,[],[],exact
+llm_story_04,excluded_days,[],[],exact
+llm_story_04,preferred_periods,[],"[""afternoon""]",mismatch
+llm_story_04,excluded_periods,[],"[""morning""]",mismatch
+llm_story_04,preferred_day_periods,[],[],exact
+llm_story_04,excluded_day_periods,[],[],exact
+llm_story_04,date_horizon_days,10,5,mismatch
+llm_story_05,complaint_category,general_query,general_review,mismatch
+llm_story_05,duration_text,,,exact
+llm_story_05,preferred_modalities,"[""phone""]","[""phone""]",exact
+llm_story_05,excluded_modalities,[],[],exact
+llm_story_05,preferred_days,"[""Fri"", ""Mon""]","[""Fri"", ""Mon""]",exact
+llm_story_05,excluded_days,[],[],exact
+llm_story_05,preferred_periods,[],"[""morning""]",mismatch
+llm_story_05,excluded_periods,[],[],exact
+llm_story_05,preferred_day_periods,[],"[""{\""day\"": \""Fri\"", \""period\"": \""morning\""}"", ""{\""day\"": \""Mon\"", \""period\"": \""morning\""}""]",mismatch
+llm_story_05,excluded_day_periods,"[""{\""day\"": \""Fri\"", \""period\"": \""morning\""}""]",[],mismatch
+llm_story_05,date_horizon_days,10,8,mismatch
+llm_story_06,complaint_category,UTI,urinary,mismatch
+llm_story_06,duration_text,next week,,mismatch
+llm_story_06,preferred_modalities,[],[],exact
+llm_story_06,excluded_modalities,[],[],exact
+llm_story_06,preferred_days,"[""Tue""]",[],mismatch
+llm_story_06,excluded_days,[],"[""Tue""]",mismatch
+llm_story_06,preferred_periods,[],"[""afternoon""]",mismatch
+llm_story_06,excluded_periods,[],[],exact
+llm_story_06,preferred_day_periods,[],[],exact
+llm_story_06,excluded_day_periods,"[""{\""day\"": \""Tue\"", \""period\"": \""afternoon\""}""]",[],mismatch
+llm_story_06,date_horizon_days,10,7,mismatch
+llm_story_07,complaint_category,Health,prescription_admin,mismatch
+llm_story_07,duration_text,within the next 12 days,,mismatch
+llm_story_07,preferred_modalities,"[""in_person""]","[""in_person""]",exact
+llm_story_07,excluded_modalities,[],[],exact
+llm_story_07,preferred_days,[],[],exact
+llm_story_07,excluded_days,"[""Mon""]","[""Mon""]",exact
+llm_story_07,preferred_periods,[],[],exact
+llm_story_07,excluded_periods,[],[],exact
+llm_story_07,preferred_day_periods,[],[],exact
+llm_story_07,excluded_day_periods,[],[],exact
+llm_story_07,date_horizon_days,10,12,mismatch
+llm_story_08,complaint_category,persistent_cough,respiratory,mismatch
+llm_story_08,duration_text,within_9_days,,mismatch
+llm_story_08,preferred_modalities,"[""phone"", ""video""]","[""phone"", ""video""]",exact
+llm_story_08,excluded_modalities,[],[],exact
+llm_story_08,preferred_days,[],[],exact
+llm_story_08,excluded_days,[],[],exact
+llm_story_08,preferred_periods,"[""afternoon""]",[],mismatch
+llm_story_08,excluded_periods,[],[],exact
+llm_story_08,preferred_day_periods,[],[],exact
+llm_story_08,excluded_day_periods,"[""{\""day\"": \""Fri\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Fri\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_08,date_horizon_days,10,9,mismatch
+llm_story_09,complaint_category,general_query,administrative,mismatch
+llm_story_09,duration_text,6 days,,mismatch
+llm_story_09,preferred_modalities,"[""video""]","[""video""]",exact
+llm_story_09,excluded_modalities,[],[],exact
+llm_story_09,preferred_days,"[""Wed""]","[""Wed""]",exact
+llm_story_09,excluded_days,[],[],exact
+llm_story_09,preferred_periods,"[""afternoon""]","[""afternoon""]",exact
+llm_story_09,excluded_periods,[],[],exact
+llm_story_09,preferred_day_periods,"[""{\""day\"": \""Wed\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Wed\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_09,excluded_day_periods,[],[],exact
+llm_story_09,date_horizon_days,10,6,mismatch
+llm_story_10,complaint_category,General Health,general_review,mismatch
+llm_story_10,duration_text,Next 11 days,,mismatch
+llm_story_10,preferred_modalities,[],[],exact
+llm_story_10,excluded_modalities,[],[],exact
+llm_story_10,preferred_days,[],[],exact
+llm_story_10,excluded_days,"[""Thu"", ""Wed""]","[""Thu"", ""Wed""]",exact
+llm_story_10,preferred_periods,[],"[""morning""]",mismatch
+llm_story_10,excluded_periods,[],[],exact
+llm_story_10,preferred_day_periods,[],[],exact
+llm_story_10,excluded_day_periods,[],[],exact
+llm_story_10,date_horizon_days,10,11,mismatch
+llm_story_11,complaint_category,medical_monitoring,tests_monitoring,mismatch
+llm_story_11,duration_text,within the next 14 days,,mismatch
+llm_story_11,preferred_modalities,"[""in_person""]","[""in_person""]",exact
+llm_story_11,excluded_modalities,"[""phone"", ""video""]","[""phone"", ""video""]",exact
+llm_story_11,preferred_days,"[""Thu"", ""Tue""]","[""Thu"", ""Tue""]",exact
+llm_story_11,excluded_days,[],[],exact
+llm_story_11,preferred_periods,"[""morning""]","[""morning""]",exact
+llm_story_11,excluded_periods,[],[],exact
+llm_story_11,preferred_day_periods,"[""{\""day\"": \""Thu\"", \""period\"": \""morning\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""morning\""}""]","[""{\""day\"": \""Thu\"", \""period\"": \""morning\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""morning\""}""]",exact
+llm_story_11,excluded_day_periods,[],[],exact
+llm_story_11,date_horizon_days,10,14,mismatch
+llm_story_12,complaint_category,UTI,urinary,mismatch
+llm_story_12,duration_text,,,exact
+llm_story_12,preferred_modalities,"[""phone""]","[""phone""]",exact
+llm_story_12,excluded_modalities,[],[],exact
+llm_story_12,preferred_days,[],"[""Fri"", ""Mon"", ""Thu"", ""Tue"", ""Wed""]",mismatch
+llm_story_12,excluded_days,[],[],exact
+llm_story_12,preferred_periods,"[""afternoon""]","[""afternoon""]",exact
+llm_story_12,excluded_periods,[],[],exact
+llm_story_12,preferred_day_periods,[],[],exact
+llm_story_12,excluded_day_periods,[],[],exact
+llm_story_12,date_horizon_days,10,4,mismatch
+llm_story_13,complaint_category,Health Consultation,prescription_admin,mismatch
+llm_story_13,duration_text,within 13 days,,mismatch
+llm_story_13,preferred_modalities,"[""video""]","[""video""]",exact
+llm_story_13,excluded_modalities,[],[],exact
+llm_story_13,preferred_days,"[""Wed""]","[""Wed""]",exact
+llm_story_13,excluded_days,[],"[""Mon""]",mismatch
+llm_story_13,preferred_periods,"[""afternoon""]","[""afternoon""]",exact
+llm_story_13,excluded_periods,[],[],exact
+llm_story_13,preferred_day_periods,"[""{\""day\"": \""Wed\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Wed\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_13,excluded_day_periods,[],[],exact
+llm_story_13,date_horizon_days,10,13,mismatch
+llm_story_14,complaint_category,Health Check,tests_monitoring,mismatch
+llm_story_14,duration_text,up to 15 days,,mismatch
+llm_story_14,preferred_modalities,"[""in_person""]","[""in_person""]",exact
+llm_story_14,excluded_modalities,"[""phone"", ""video""]","[""phone"", ""video""]",exact
+llm_story_14,preferred_days,"[""Tue""]","[""Tue""]",exact
+llm_story_14,excluded_days,[],[],exact
+llm_story_14,preferred_periods,"[""afternoon""]","[""afternoon""]",exact
+llm_story_14,excluded_periods,[],[],exact
+llm_story_14,preferred_day_periods,"[""{\""day\"": \""Tue\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Tue\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_14,excluded_day_periods,[],[],exact
+llm_story_14,date_horizon_days,10,15,mismatch
+llm_story_15,complaint_category,general_query,administrative,mismatch
+llm_story_15,duration_text,within the next 9 days,,mismatch
+llm_story_15,preferred_modalities,"[""phone"", ""video""]","[""phone"", ""video""]",exact
+llm_story_15,excluded_modalities,[],[],exact
+llm_story_15,preferred_days,[],[],exact
+llm_story_15,excluded_days,"[""Fri""]","[""Fri""]",exact
+llm_story_15,preferred_periods,[],"[""afternoon""]",mismatch
+llm_story_15,excluded_periods,[],[],exact
+llm_story_15,preferred_day_periods,[],[],exact
+llm_story_15,excluded_day_periods,"[""{\""day\"": \""Fri\"", \""period\"": \""afternoon\""}""]",[],mismatch
+llm_story_15,date_horizon_days,10,9,mismatch
+llm_story_16,complaint_category,General Health,general_review,mismatch
+llm_story_16,duration_text,12 days,,mismatch
+llm_story_16,preferred_modalities,"[""in_person""]","[""in_person""]",exact
+llm_story_16,excluded_modalities,[],[],exact
+llm_story_16,preferred_days,"[""Thu"", ""Tue""]","[""Thu"", ""Tue""]",exact
+llm_story_16,excluded_days,[],[],exact
+llm_story_16,preferred_periods,"[""afternoon"", ""morning""]","[""afternoon"", ""morning""]",exact
+llm_story_16,excluded_periods,[],[],exact
+llm_story_16,preferred_day_periods,"[""{\""day\"": \""Thu\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Thu\"", \""period\"": \""morning\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""morning\""}""]","[""{\""day\"": \""Thu\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""morning\""}""]",partial
+llm_story_16,excluded_day_periods,[],[],exact
+llm_story_16,date_horizon_days,10,12,mismatch
+llm_story_17,complaint_category,urinary,urinary,exact
+llm_story_17,duration_text,within 5 days,,mismatch
+llm_story_17,preferred_modalities,"[""phone""]","[""phone""]",exact
+llm_story_17,excluded_modalities,[],[],exact
+llm_story_17,preferred_days,[],[],exact
+llm_story_17,excluded_days,[],[],exact
+llm_story_17,preferred_periods,"[""morning""]",[],mismatch
+llm_story_17,excluded_periods,[],[],exact
+llm_story_17,preferred_day_periods,[],[],exact
+llm_story_17,excluded_day_periods,"[""{\""day\"": \""Wed\"", \""period\"": \""morning\""}""]","[""{\""day\"": \""Wed\"", \""period\"": \""morning\""}""]",exact
+llm_story_17,date_horizon_days,10,5,mismatch
+llm_story_18,complaint_category,Cough,respiratory,mismatch
+llm_story_18,duration_text,,,exact
+llm_story_18,preferred_modalities,"[""video""]","[""video""]",exact
+llm_story_18,excluded_modalities,[],[],exact
+llm_story_18,preferred_days,"[""Mon""]",[],mismatch
+llm_story_18,excluded_days,[],"[""Mon""]",mismatch
+llm_story_18,preferred_periods,[],"[""afternoon"", ""morning""]",mismatch
+llm_story_18,excluded_periods,[],[],exact
+llm_story_18,preferred_day_periods,[],[],exact
+llm_story_18,excluded_day_periods,[],[],exact
+llm_story_18,date_horizon_days,10,6,mismatch
+llm_story_19,complaint_category,General,administrative,mismatch
+llm_story_19,duration_text,within 7 days,,mismatch
+llm_story_19,preferred_modalities,[],"[""phone"", ""video""]",mismatch
+llm_story_19,excluded_modalities,[],[],exact
+llm_story_19,preferred_days,[],[],exact
+llm_story_19,excluded_days,[],[],exact
+llm_story_19,preferred_periods,"[""afternoon"", ""morning""]",[],mismatch
+llm_story_19,excluded_periods,[],[],exact
+llm_story_19,preferred_day_periods,[],[],exact
+llm_story_19,excluded_day_periods,"[""{\""day\"": \""Fri\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Fri\"", \""period\"": \""morning\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""morning\""}""]","[""{\""day\"": \""Fri\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""morning\""}""]",partial
+llm_story_19,date_horizon_days,10,7,mismatch
+llm_story_20,complaint_category,general_query,general_review,mismatch
+llm_story_20,duration_text,,,exact
+llm_story_20,preferred_modalities,"[""phone""]","[""phone""]",exact
+llm_story_20,excluded_modalities,"[""in_person"", ""video""]","[""in_person"", ""video""]",exact
+llm_story_20,preferred_days,[],[],exact
+llm_story_20,excluded_days,"[""Mon"", ""Thu""]","[""Mon"", ""Thu""]",exact
+llm_story_20,preferred_periods,[],[],exact
+llm_story_20,excluded_periods,[],[],exact
+llm_story_20,preferred_day_periods,[],[],exact
+llm_story_20,excluded_day_periods,[],[],exact
+llm_story_20,date_horizon_days,10,7,mismatch
+llm_story_21,complaint_category,medical_appointment,tests_monitoring,mismatch
+llm_story_21,duration_text,after 9 days,,mismatch
+llm_story_21,preferred_modalities,"[""in_person""]","[""in_person""]",exact
+llm_story_21,excluded_modalities,"[""phone"", ""video""]","[""phone"", ""video""]",exact
+llm_story_21,preferred_days,"[""Thu""]","[""Thu""]",exact
+llm_story_21,excluded_days,[],[],exact
+llm_story_21,preferred_periods,"[""morning""]","[""morning""]",exact
+llm_story_21,excluded_periods,[],[],exact
+llm_story_21,preferred_day_periods,"[""{\""day\"": \""Thu\"", \""period\"": \""morning\""}""]","[""{\""day\"": \""Thu\"", \""period\"": \""morning\""}""]",exact
+llm_story_21,excluded_day_periods,[],[],exact
+llm_story_21,date_horizon_days,10,9,mismatch
+llm_story_22,complaint_category,Cough,respiratory,mismatch
+llm_story_22,duration_text,,,exact
+llm_story_22,preferred_modalities,"[""phone""]","[""phone""]",exact
+llm_story_22,excluded_modalities,[],[],exact
+llm_story_22,preferred_days,"[""Mon"", ""Tue""]","[""Mon"", ""Tue""]",exact
+llm_story_22,excluded_days,"[""Wed""]","[""Wed""]",exact
+llm_story_22,preferred_periods,"[""afternoon""]","[""afternoon""]",exact
+llm_story_22,excluded_periods,[],[],exact
+llm_story_22,preferred_day_periods,"[""{\""day\"": \""Mon\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Mon\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_22,excluded_day_periods,[],[],exact
+llm_story_22,date_horizon_days,10,8,mismatch
+llm_story_23,complaint_category,UTI,urinary,mismatch
+llm_story_23,duration_text,,,exact
+llm_story_23,preferred_modalities,"[""video""]","[""video""]",exact
+llm_story_23,excluded_modalities,"[""in_person"", ""phone""]",[],mismatch
+llm_story_23,preferred_days,[],[],exact
+llm_story_23,excluded_days,"[""Mon"", ""Tue""]","[""Mon"", ""Tue""]",exact
+llm_story_23,preferred_periods,[],"[""afternoon""]",mismatch
+llm_story_23,excluded_periods,[],[],exact
+llm_story_23,preferred_day_periods,[],[],exact
+llm_story_23,excluded_day_periods,[],[],exact
+llm_story_23,date_horizon_days,10,5,mismatch
+llm_story_24,complaint_category,medical,prescription_admin,mismatch
+llm_story_24,duration_text,up to 10 days,,mismatch
+llm_story_24,preferred_modalities,[],"[""phone"", ""video""]",mismatch
+llm_story_24,excluded_modalities,[],[],exact
+llm_story_24,preferred_days,"[""Thu"", ""Tue""]","[""Thu"", ""Tue""]",exact
+llm_story_24,excluded_days,[],[],exact
+llm_story_24,preferred_periods,"[""morning""]","[""morning""]",exact
+llm_story_24,excluded_periods,[],[],exact
+llm_story_24,preferred_day_periods,"[""{\""day\"": \""Thu\"", \""period\"": \""morning\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""morning\""}""]","[""{\""day\"": \""Thu\"", \""period\"": \""morning\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""morning\""}""]",exact
+llm_story_24,excluded_day_periods,[],[],exact
+llm_story_24,date_horizon_days,10,10,exact
+llm_story_25,complaint_category,administrative_note_request,administrative,partial
+llm_story_25,duration_text,within 4 days,,mismatch
+llm_story_25,preferred_modalities,"[""phone""]","[""phone""]",exact
+llm_story_25,excluded_modalities,[],[],exact
+llm_story_25,preferred_days,[],[],exact
+llm_story_25,excluded_days,[],[],exact
+llm_story_25,preferred_periods,"[""afternoon""]",[],mismatch
+llm_story_25,excluded_periods,[],[],exact
+llm_story_25,preferred_day_periods,[],[],exact
+llm_story_25,excluded_day_periods,"[""{\""day\"": \""Wed\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Wed\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_25,date_horizon_days,10,4,mismatch
+llm_story_26,complaint_category,general_query,general_review,mismatch
+llm_story_26,duration_text,within the next 14 days,,mismatch
+llm_story_26,preferred_modalities,"[""in_person""]","[""in_person""]",exact
+llm_story_26,excluded_modalities,"[""phone"", ""video""]",[],mismatch
+llm_story_26,preferred_days,[],[],exact
+llm_story_26,excluded_days,"[""Fri""]","[""Fri""]",exact
+llm_story_26,preferred_periods,[],"[""afternoon""]",mismatch
+llm_story_26,excluded_periods,[],"[""evening"", ""morning""]",mismatch
+llm_story_26,preferred_day_periods,[],[],exact
+llm_story_26,excluded_day_periods,[],[],exact
+llm_story_26,date_horizon_days,10,14,mismatch
+llm_story_27,complaint_category,Cough,respiratory,mismatch
+llm_story_27,duration_text,ten days,,mismatch
+llm_story_27,preferred_modalities,"[""video""]","[""video""]",exact
+llm_story_27,excluded_modalities,[],[],exact
+llm_story_27,preferred_days,"[""Mon"", ""Thu""]","[""Mon"", ""Thu""]",exact
+llm_story_27,excluded_days,[],[],exact
+llm_story_27,preferred_periods,"[""morning""]","[""morning""]",exact
+llm_story_27,excluded_periods,[],[],exact
+llm_story_27,preferred_day_periods,"[""{\""day\"": \""Mon\"", \""period\"": \""morning\""}"", ""{\""day\"": \""Thu\"", \""period\"": \""morning\""}""]","[""{\""day\"": \""Mon\"", \""period\"": \""morning\""}"", ""{\""day\"": \""Thu\"", \""period\"": \""morning\""}""]",exact
+llm_story_27,excluded_day_periods,[],[],exact
+llm_story_27,date_horizon_days,10,12,mismatch
+llm_story_28,complaint_category,Health Monitoring,tests_monitoring,mismatch
+llm_story_28,duration_text,within the next 13 days,,mismatch
+llm_story_28,preferred_modalities,"[""in_person""]","[""in_person""]",exact
+llm_story_28,excluded_modalities,"[""phone"", ""video""]","[""phone"", ""video""]",exact
+llm_story_28,preferred_days,[],[],exact
+llm_story_28,excluded_days,[],"[""Mon""]",mismatch
+llm_story_28,preferred_periods,"[""afternoon""]",[],mismatch
+llm_story_28,excluded_periods,[],[],exact
+llm_story_28,preferred_day_periods,[],[],exact
+llm_story_28,excluded_day_periods,"[""{\""day\"": \""Fri\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Fri\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_28,date_horizon_days,10,13,mismatch
+llm_story_29,complaint_category,urinary_symptoms,urinary,partial
+llm_story_29,duration_text,within_6_days,,mismatch
+llm_story_29,preferred_modalities,"[""phone""]","[""phone""]",exact
+llm_story_29,excluded_modalities,[],[],exact
+llm_story_29,preferred_days,"[""Tue""]","[""Tue""]",exact
+llm_story_29,excluded_days,[],[],exact
+llm_story_29,preferred_periods,[],[],exact
+llm_story_29,excluded_periods,[],"[""morning""]",mismatch
+llm_story_29,preferred_day_periods,[],[],exact
+llm_story_29,excluded_day_periods,[],[],exact
+llm_story_29,date_horizon_days,10,6,mismatch
+llm_story_30,complaint_category,Medication,prescription_admin,mismatch
+llm_story_30,duration_text,Next 11 days,,mismatch
+llm_story_30,preferred_modalities,"[""video""]","[""video""]",exact
+llm_story_30,excluded_modalities,[],[],exact
+llm_story_30,preferred_days,[],[],exact
+llm_story_30,excluded_days,[],"[""Thu"", ""Tue""]",mismatch
+llm_story_30,preferred_periods,"[""morning""]","[""morning""]",exact
+llm_story_30,excluded_periods,[],[],exact
+llm_story_30,preferred_day_periods,[],[],exact
+llm_story_30,excluded_day_periods,"[""{\""day\"": \""Thu\"", \""period\"": \""morning\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""morning\""}""]",[],mismatch
+llm_story_30,date_horizon_days,10,11,mismatch
+llm_story_31,complaint_category,Administrative Letter Request,administrative,partial
+llm_story_31,duration_text,Within the next 8 days,,mismatch
+llm_story_31,preferred_modalities,"[""phone""]","[""phone""]",exact
+llm_story_31,excluded_modalities,[],[],exact
+llm_story_31,preferred_days,"[""Mon"", ""Thu""]","[""Mon"", ""Thu""]",exact
+llm_story_31,excluded_days,[],[],exact
+llm_story_31,preferred_periods,"[""afternoon""]","[""afternoon""]",exact
+llm_story_31,excluded_periods,[],[],exact
+llm_story_31,preferred_day_periods,"[""{\""day\"": \""Mon\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Thu\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Mon\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Thu\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_31,excluded_day_periods,[],[],exact
+llm_story_31,date_horizon_days,10,8,mismatch
+llm_story_32,complaint_category,general,general_review,partial
+llm_story_32,duration_text,next 9 days,,mismatch
+llm_story_32,preferred_modalities,"[""video""]","[""video""]",exact
+llm_story_32,excluded_modalities,[],[],exact
+llm_story_32,preferred_days,[],[],exact
+llm_story_32,excluded_days,"[""Fri"", ""Tue""]",[],mismatch
+llm_story_32,preferred_periods,[],[],exact
+llm_story_32,excluded_periods,[],[],exact
+llm_story_32,preferred_day_periods,[],[],exact
+llm_story_32,excluded_day_periods,"[""{\""day\"": \""Fri\"", \""period\"": \""morning\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""morning\""}""]","[""{\""day\"": \""Fri\"", \""period\"": \""morning\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""morning\""}""]",exact
+llm_story_32,date_horizon_days,10,9,mismatch
+llm_story_33,complaint_category,Health Monitoring,tests_monitoring,mismatch
+llm_story_33,duration_text,within 10 days,,mismatch
+llm_story_33,preferred_modalities,"[""in_person""]","[""in_person""]",exact
+llm_story_33,excluded_modalities,"[""phone"", ""video""]","[""phone"", ""video""]",exact
+llm_story_33,preferred_days,"[""Thu""]","[""Thu""]",exact
+llm_story_33,excluded_days,[],"[""Wed""]",mismatch
+llm_story_33,preferred_periods,"[""afternoon""]","[""afternoon""]",exact
+llm_story_33,excluded_periods,[],[],exact
+llm_story_33,preferred_day_periods,"[""{\""day\"": \""Thu\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Thu\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_33,excluded_day_periods,[],[],exact
+llm_story_33,date_horizon_days,10,10,exact
+llm_story_34,complaint_category,Cough,respiratory,mismatch
+llm_story_34,duration_text,within 7 days,,mismatch
+llm_story_34,preferred_modalities,"[""phone"", ""video""]","[""phone"", ""video""]",exact
+llm_story_34,excluded_modalities,[],[],exact
+llm_story_34,preferred_days,[],[],exact
+llm_story_34,excluded_days,[],[],exact
+llm_story_34,preferred_periods,"[""afternoon""]",[],mismatch
+llm_story_34,excluded_periods,[],[],exact
+llm_story_34,preferred_day_periods,[],[],exact
+llm_story_34,excluded_day_periods,"[""{\""day\"": \""Tue\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Wed\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Tue\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Wed\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_34,date_horizon_days,10,7,mismatch
+llm_story_35,complaint_category,Health Condition,urinary,mismatch
+llm_story_35,duration_text,within 5 days,,mismatch
+llm_story_35,preferred_modalities,"[""phone""]","[""phone""]",exact
+llm_story_35,excluded_modalities,[],[],exact
+llm_story_35,preferred_days,"[""Fri""]","[""Fri""]",exact
+llm_story_35,excluded_days,[],[],exact
+llm_story_35,preferred_periods,"[""morning""]","[""morning""]",exact
+llm_story_35,excluded_periods,[],[],exact
+llm_story_35,preferred_day_periods,"[""{\""day\"": \""Fri\"", \""period\"": \""morning\""}""]","[""{\""day\"": \""Fri\"", \""period\"": \""morning\""}""]",exact
+llm_story_35,excluded_day_periods,[],[],exact
+llm_story_35,date_horizon_days,10,5,mismatch
+llm_story_36,complaint_category,Medication Request,prescription_admin,mismatch
+llm_story_36,duration_text,Next 10 days,,mismatch
+llm_story_36,preferred_modalities,"[""video""]","[""video""]",exact
+llm_story_36,excluded_modalities,[],[],exact
+llm_story_36,preferred_days,"[""Fri"", ""Wed""]","[""Fri"", ""Wed""]",exact
+llm_story_36,excluded_days,[],[],exact
+llm_story_36,preferred_periods,"[""afternoon""]","[""afternoon""]",exact
+llm_story_36,excluded_periods,[],"[""morning""]",mismatch
+llm_story_36,preferred_day_periods,"[""{\""day\"": \""Fri\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Wed\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Fri\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Wed\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_36,excluded_day_periods,[],[],exact
+llm_story_36,date_horizon_days,10,10,exact
+llm_story_37,complaint_category,Health Consultation,administrative,mismatch
+llm_story_37,duration_text,Flexible (within 6 days),,mismatch
+llm_story_37,preferred_modalities,[],"[""phone"", ""video""]",mismatch
+llm_story_37,excluded_modalities,[],[],exact
+llm_story_37,preferred_days,[],[],exact
+llm_story_37,excluded_days,"[""Mon"", ""Tue""]","[""Mon"", ""Tue""]",exact
+llm_story_37,preferred_periods,[],"[""afternoon""]",mismatch
+llm_story_37,excluded_periods,[],"[""evening"", ""morning""]",mismatch
+llm_story_37,preferred_day_periods,[],[],exact
+llm_story_37,excluded_day_periods,"[""{\""day\"": \""Mon\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""afternoon\""}""]",[],mismatch
+llm_story_37,date_horizon_days,10,6,mismatch
+llm_story_38,complaint_category,general_query,general_review,mismatch
+llm_story_38,duration_text,within 12 days,,mismatch
+llm_story_38,preferred_modalities,"[""in_person""]","[""in_person""]",exact
+llm_story_38,excluded_modalities,"[""phone"", ""video""]","[""phone"", ""video""]",exact
+llm_story_38,preferred_days,"[""Mon""]","[""Mon""]",exact
+llm_story_38,excluded_days,[],[],exact
+llm_story_38,preferred_periods,"[""afternoon"", ""morning""]","[""morning""]",partial
+llm_story_38,excluded_periods,[],[],exact
+llm_story_38,preferred_day_periods,"[""{\""day\"": \""Mon\"", \""period\"": \""morning\""}""]","[""{\""day\"": \""Mon\"", \""period\"": \""morning\""}""]",exact
+llm_story_38,excluded_day_periods,"[""{\""day\"": \""Thu\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Thu\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_38,date_horizon_days,10,12,mismatch
+llm_story_39,complaint_category,persistent_cough,respiratory,mismatch
+llm_story_39,duration_text,within_the_next_9_days,,mismatch
+llm_story_39,preferred_modalities,"[""video""]","[""video""]",exact
+llm_story_39,excluded_modalities,"[""in_person"", ""phone""]",[],mismatch
+llm_story_39,preferred_days,[],[],exact
+llm_story_39,excluded_days,"[""Fri""]","[""Fri""]",exact
+llm_story_39,preferred_periods,[],"[""morning""]",mismatch
+llm_story_39,excluded_periods,[],[],exact
+llm_story_39,preferred_day_periods,[],[],exact
+llm_story_39,excluded_day_periods,[],[],exact
+llm_story_39,date_horizon_days,10,9,mismatch
+llm_story_40,complaint_category,Health Monitoring,tests_monitoring,mismatch
+llm_story_40,duration_text,within 11 days,,mismatch
+llm_story_40,preferred_modalities,"[""in_person""]","[""in_person""]",exact
+llm_story_40,excluded_modalities,"[""phone"", ""video""]","[""phone"", ""video""]",exact
+llm_story_40,preferred_days,"[""Tue"", ""Wed""]","[""Tue"", ""Wed""]",exact
+llm_story_40,excluded_days,[],[],exact
+llm_story_40,preferred_periods,"[""afternoon"", ""morning""]","[""afternoon"", ""morning""]",exact
+llm_story_40,excluded_periods,[],[],exact
+llm_story_40,preferred_day_periods,"[""{\""day\"": \""Tue\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Tue\"", \""period\"": \""morning\""}"", ""{\""day\"": \""Wed\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Wed\"", \""period\"": \""morning\""}""]","[""{\""day\"": \""Tue\"", \""period\"": \""morning\""}"", ""{\""day\"": \""Wed\"", \""period\"": \""afternoon\""}""]",partial
+llm_story_40,excluded_day_periods,[],[],exact
+llm_story_40,date_horizon_days,10,11,mismatch
+llm_story_41,complaint_category,urinary symptoms,urinary,partial
+llm_story_41,duration_text,,,exact
+llm_story_41,preferred_modalities,"[""phone""]","[""phone""]",exact
+llm_story_41,excluded_modalities,[],[],exact
+llm_story_41,preferred_days,[],[],exact
+llm_story_41,excluded_days,"[""Thu"", ""Tue""]","[""Thu"", ""Tue""]",exact
+llm_story_41,preferred_periods,[],"[""evening""]",mismatch
+llm_story_41,excluded_periods,[],[],exact
+llm_story_41,preferred_day_periods,[],[],exact
+llm_story_41,excluded_day_periods,[],[],exact
+llm_story_41,date_horizon_days,10,8,mismatch
+llm_story_42,complaint_category,Health Consultation,prescription_admin,mismatch
+llm_story_42,duration_text,Remote consultation within the next week,,mismatch
+llm_story_42,preferred_modalities,[],"[""phone"", ""video""]",mismatch
+llm_story_42,excluded_modalities,[],[],exact
+llm_story_42,preferred_days,[],[],exact
+llm_story_42,excluded_days,[],[],exact
+llm_story_42,preferred_periods,"[""afternoon"", ""morning""]","[""afternoon""]",partial
+llm_story_42,excluded_periods,[],[],exact
+llm_story_42,preferred_day_periods,[],[],exact
+llm_story_42,excluded_day_periods,"[""{\""day\"": \""Wed\"", \""period\"": \""morning\""}""]","[""{\""day\"": \""Wed\"", \""period\"": \""morning\""}""]",exact
+llm_story_42,date_horizon_days,10,7,mismatch
+llm_story_43,complaint_category,General Health,administrative,mismatch
+llm_story_43,duration_text,Within 5 days,,mismatch
+llm_story_43,preferred_modalities,"[""phone""]","[""phone""]",exact
+llm_story_43,excluded_modalities,"[""in_person"", ""video""]","[""in_person"", ""video""]",exact
+llm_story_43,preferred_days,"[""Tue""]","[""Tue""]",exact
+llm_story_43,excluded_days,[],"[""Mon""]",mismatch
+llm_story_43,preferred_periods,"[""morning""]","[""morning""]",exact
+llm_story_43,excluded_periods,[],[],exact
+llm_story_43,preferred_day_periods,[],"[""{\""day\"": \""Tue\"", \""period\"": \""morning\""}""]",mismatch
+llm_story_43,excluded_day_periods,"[""{\""day\"": \""Tue\"", \""period\"": \""morning\""}""]",[],mismatch
+llm_story_43,date_horizon_days,10,5,mismatch
+llm_story_44,complaint_category,general_query,general_review,mismatch
+llm_story_44,duration_text,,,exact
+llm_story_44,preferred_modalities,"[""video""]","[""video""]",exact
+llm_story_44,excluded_modalities,[],[],exact
+llm_story_44,preferred_days,"[""Fri"", ""Wed""]","[""Fri"", ""Wed""]",exact
+llm_story_44,excluded_days,[],[],exact
+llm_story_44,preferred_periods,[],[],exact
+llm_story_44,excluded_periods,[],"[""morning""]",mismatch
+llm_story_44,preferred_day_periods,[],[],exact
+llm_story_44,excluded_day_periods,[],[],exact
+llm_story_44,date_horizon_days,10,13,mismatch
+llm_story_45,complaint_category,Cough,respiratory,mismatch
+llm_story_45,duration_text,Two weeks,,mismatch
+llm_story_45,preferred_modalities,"[""phone""]","[""phone""]",exact
+llm_story_45,excluded_modalities,[],[],exact
+llm_story_45,preferred_days,"[""Thu""]","[""Thu""]",exact
+llm_story_45,excluded_days,[],[],exact
+llm_story_45,preferred_periods,"[""afternoon"", ""morning""]","[""afternoon""]",partial
+llm_story_45,excluded_periods,[],[],exact
+llm_story_45,preferred_day_periods,"[""{\""day\"": \""Thu\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Thu\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_45,excluded_day_periods,"[""{\""day\"": \""Tue\"", \""period\"": \""morning\""}""]","[""{\""day\"": \""Tue\"", \""period\"": \""morning\""}""]",exact
+llm_story_45,date_horizon_days,10,10,exact
+llm_story_46,complaint_category,Health Check (Blood Pressure),tests_monitoring,mismatch
+llm_story_46,duration_text,Next 14 days,,mismatch
+llm_story_46,preferred_modalities,"[""in_person""]","[""in_person""]",exact
+llm_story_46,excluded_modalities,"[""phone"", ""video""]","[""phone"", ""video""]",exact
+llm_story_46,preferred_days,"[""Fri""]","[""Fri""]",exact
+llm_story_46,excluded_days,"[""Mon"", ""Tue""]","[""Mon"", ""Tue""]",exact
+llm_story_46,preferred_periods,"[""afternoon""]","[""afternoon""]",exact
+llm_story_46,excluded_periods,[],[],exact
+llm_story_46,preferred_day_periods,"[""{\""day\"": \""Fri\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Fri\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_46,excluded_day_periods,[],[],exact
+llm_story_46,date_horizon_days,10,14,mismatch
+llm_story_47,complaint_category,UTI,urinary,mismatch
+llm_story_47,duration_text,within 6 days,,mismatch
+llm_story_47,preferred_modalities,"[""video""]","[""video""]",exact
+llm_story_47,excluded_modalities,"[""in_person"", ""phone""]",[],mismatch
+llm_story_47,preferred_days,[],[],exact
+llm_story_47,excluded_days,"[""Fri""]","[""Fri""]",exact
+llm_story_47,preferred_periods,[],"[""morning""]",mismatch
+llm_story_47,excluded_periods,[],"[""afternoon"", ""evening""]",mismatch
+llm_story_47,preferred_day_periods,[],[],exact
+llm_story_47,excluded_day_periods,[],[],exact
+llm_story_47,date_horizon_days,10,6,mismatch
+llm_story_48,complaint_category,Medication Review,prescription_admin,mismatch
+llm_story_48,duration_text,Next 8 days,,mismatch
+llm_story_48,preferred_modalities,"[""phone""]","[""phone""]",exact
+llm_story_48,excluded_modalities,[],[],exact
+llm_story_48,preferred_days,[],[],exact
+llm_story_48,excluded_days,[],[],exact
+llm_story_48,preferred_periods,"[""afternoon""]",[],mismatch
+llm_story_48,excluded_periods,[],[],exact
+llm_story_48,preferred_day_periods,[],[],exact
+llm_story_48,excluded_day_periods,"[""{\""day\"": \""Thu\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Wed\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Thu\"", \""period\"": \""afternoon\""}"", ""{\""day\"": \""Wed\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_48,date_horizon_days,10,8,mismatch
+llm_story_49,complaint_category,administrative,administrative,exact
+llm_story_49,duration_text,up to 9 days,,mismatch
+llm_story_49,preferred_modalities,"[""video""]","[""video""]",exact
+llm_story_49,excluded_modalities,[],[],exact
+llm_story_49,preferred_days,"[""Fri"", ""Mon""]","[""Fri"", ""Mon""]",exact
+llm_story_49,excluded_days,[],[],exact
+llm_story_49,preferred_periods,"[""morning""]","[""morning""]",exact
+llm_story_49,excluded_periods,[],[],exact
+llm_story_49,preferred_day_periods,"[""{\""day\"": \""Fri\"", \""period\"": \""morning\""}"", ""{\""day\"": \""Mon\"", \""period\"": \""morning\""}""]","[""{\""day\"": \""Fri\"", \""period\"": \""morning\""}"", ""{\""day\"": \""Mon\"", \""period\"": \""morning\""}""]",exact
+llm_story_49,excluded_day_periods,[],[],exact
+llm_story_49,date_horizon_days,10,9,mismatch
+llm_story_50,complaint_category,General Health Checkup,general_review,mismatch
+llm_story_50,duration_text,within 7 days,,mismatch
+llm_story_50,preferred_modalities,"[""phone"", ""video""]","[""phone"", ""video""]",exact
+llm_story_50,excluded_modalities,[],[],exact
+llm_story_50,preferred_days,"[""Tue""]","[""Tue""]",exact
+llm_story_50,excluded_days,[],"[""Mon""]",mismatch
+llm_story_50,preferred_periods,"[""afternoon""]","[""afternoon""]",exact
+llm_story_50,excluded_periods,[],[],exact
+llm_story_50,preferred_day_periods,"[""{\""day\"": \""Tue\"", \""period\"": \""afternoon\""}""]","[""{\""day\"": \""Tue\"", \""period\"": \""afternoon\""}""]",exact
+llm_story_50,excluded_day_periods,[],[],exact
+llm_story_50,date_horizon_days,10,7,mismatch

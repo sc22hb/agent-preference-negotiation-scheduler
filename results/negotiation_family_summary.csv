@@ -1,0 +1,5 @@
+negotiation_family,total_cases,successful_cases,success_rate_pct,mean_rounds,median_rounds,p95_rounds
+combined_multi_round,8,8,100.0,2.0,2.0,2.0
+day_relax,12,12,100.0,1.0,1.0,1.0
+modality_relax,8,8,100.0,0.875,1.0,1.0
+time_relax,12,12,100.0,1.0,1.0,1.0

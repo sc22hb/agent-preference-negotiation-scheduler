@@ -28,6 +28,7 @@ class ReceptionistAgent:
         "skin": ["rash", "skin"],
         "tests_monitoring": ["blood test", "bp", "blood pressure", "monitoring"],
         "administrative": ["fit note", "letter", "certificate", "admin"],
+        "general_review": ["mri", "ct scan", "ultrasound", "x ray", "xray", "scan referral", "referral"],
     }
 
     DAY_PATTERNS: Dict[str, str] = {
@@ -59,7 +60,20 @@ class ReceptionistAgent:
     MODALITIES = ["in_person", "phone", "video"]
     PERIODS = ["morning", "afternoon", "evening"]
     IN_PERSON_ONLY_CATEGORIES = {"tests_monitoring"}
-    IN_PERSON_ONLY_KEYWORDS = ["blood test", "bp check", "blood pressure", "vaccination"]
+    IN_PERSON_ONLY_KEYWORDS = [
+        "blood test",
+        "bp check",
+        "blood pressure",
+        "vaccination",
+        "mri",
+        "mri scan",
+        "ct scan",
+        "ultrasound",
+        "x ray",
+        "xray",
+        "scan referral",
+        "imaging",
+    ]
     CATEGORY_ALIASES: Dict[str, List[str]] = {
         "prescription_admin": [
             "prescription_admin",
@@ -114,6 +128,14 @@ class ReceptionistAgent:
             "routine review",
             "routine check",
             "review",
+            "mri",
+            "mri scan",
+            "ct scan",
+            "ultrasound",
+            "x ray",
+            "xray",
+            "scan referral",
+            "referral",
         ],
     }
     NUMBER_WORDS: Dict[str, int] = {
@@ -139,6 +161,7 @@ class ReceptionistAgent:
         "availability_exclusion": "availability_exclusion",
         "duration": "duration_text",
     }
+    SUPPORTED_MISSING_FIELDS = {"complaint_context", "modality", "availability", "duration"}
     CANONICAL_PROMPTS: Dict[str, str] = {
         "preferred_modality": "Do you prefer an in-person, phone, or video consultation?",
     }
@@ -261,9 +284,14 @@ class ReceptionistAgent:
     ) -> Tuple[IntakeSummary, List[ClarificationQuestion], Dict[str, Any]] | None:
         self._last_llm_error = None
         effective_key = (api_key or os.getenv("OPENAI_API_KEY", "")).strip()
+        custom_base_url = os.getenv("OPENAI_BASE_URL", "").strip() or None
         if (not effective_key) or ("YOUR_OPENAI_API_KEY" in effective_key):
-            self._last_llm_error = "missing or placeholder OpenAI API key"
-            return None
+            if not custom_base_url:
+                self._last_llm_error = "missing or placeholder OpenAI API key"
+                return None
+            # Local servers don't need a real key; use a dummy value.
+            if not effective_key:
+                effective_key = "local"
 
         try:
             from openai import OpenAI
@@ -291,24 +319,47 @@ class ReceptionistAgent:
             {"role": "user", "content": prompt},
         ]
 
+        # When a custom base URL is set (e.g. Ollama), use the chat completions
+        # API instead of the OpenAI-specific responses API.
+        use_chat_completions = custom_base_url is not None
+
         raw = ""
         try:
             if OpenAI is not None:
-                response = OpenAI(api_key=effective_key, timeout=30.0, max_retries=1).responses.create(
-                    model=model,
-                    input=request_input,
-                    temperature=0,
-                )
-                raw = getattr(response, "output_text", "") or ""
-                if not raw.strip():
-                    raw = self._extract_output_text_from_http_payload(
-                        self._coerce_response_to_dict(response)
+                client_kwargs: Dict[str, Any] = {
+                    "api_key": effective_key,
+                    "timeout": 30.0,
+                    "max_retries": 1,
+                }
+                if custom_base_url:
+                    client_kwargs["base_url"] = custom_base_url
+                client = OpenAI(**client_kwargs)
+
+                if use_chat_completions:
+                    chat_response = client.chat.completions.create(
+                        model=model,
+                        messages=request_input,
+                        temperature=0,
+                        max_tokens=512,
                     )
+                    raw = (chat_response.choices[0].message.content or "") if chat_response.choices else ""
+                else:
+                    response = client.responses.create(
+                        model=model,
+                        input=request_input,
+                        temperature=0,
+                    )
+                    raw = getattr(response, "output_text", "") or ""
+                    if not raw.strip():
+                        raw = self._extract_output_text_from_http_payload(
+                            self._coerce_response_to_dict(response)
+                        )
             else:
                 raw = self._call_openai_responses_http(
                     api_key=effective_key,
                     model=model,
                     request_input=request_input,
+                    base_url=custom_base_url,
                 ) or ""
 
             if not raw.strip():
@@ -343,14 +394,29 @@ class ReceptionistAgent:
                 complaint_category=complaint_category,
                 raw_text=text,
             )
-            if complaint_category == "general_query":
+            if complaint_category == "general_query" and not self._has_answered_complaint_context(
+                text,
+                clarification_answers,
+            ):
                 inferred_missing_fields.append("complaint_context")
             merged_missing_fields = self._merge_unique_fields(
                 llm_missing_fields,
                 inferred_missing_fields,
             )
             answered_question_ids = self._answered_clarification_ids(clarification_answers)
-            questions = [q for q in questions if q.question_id not in answered_question_ids]
+            questions = [
+                q
+                for q in questions
+                if q.question_id not in answered_question_ids
+                and self._should_ask_question(
+                    q,
+                    preferences=preferences,
+                    complaint_category=complaint_category,
+                    raw_text=text,
+                    duration_text=self._canonicalize_duration_text(payload.get("duration_text"), text=text),
+                    clarification_answers=clarification_answers,
+                )
+            ]
             has_user_clarification = bool(
                 clarification_answers and any(value.strip() for value in clarification_answers.values())
             )
@@ -458,6 +524,7 @@ class ReceptionistAgent:
             return []
 
         questions: List[ClarificationQuestion] = []
+        seen_question_ids: set[str] = set()
         for idx, item in enumerate(raw):
             if len(questions) >= 2:
                 break
@@ -475,6 +542,9 @@ class ReceptionistAgent:
             if not question_id or re.match(r"^q_\d+$", question_id):
                 question_id = inferred or f"q_{idx + 1}"
             prompt = self._canonical_prompt(question_id, prompt)
+            if question_id in seen_question_ids:
+                continue
+            seen_question_ids.add(question_id)
             questions.append(ClarificationQuestion(question_id=question_id, prompt=prompt))
 
         return questions
@@ -497,8 +567,36 @@ class ReceptionistAgent:
     def _parse_missing_fields(self, raw: Any) -> List[str]:
         if not isinstance(raw, list):
             return []
-        parsed = [str(item).strip() for item in raw if str(item).strip()]
+        parsed: List[str] = []
+        aliases = {
+            "preferred_modality": "modality",
+            "duration_text": "duration",
+        }
+        for item in raw:
+            token = str(item).strip()
+            if not token:
+                continue
+            normalized = aliases.get(token, token)
+            if normalized in self.SUPPORTED_MISSING_FIELDS:
+                parsed.append(normalized)
         return self._merge_unique_fields(parsed)
+
+    def _has_answered_complaint_context(
+        self,
+        text: str,
+        clarification_answers: Dict[str, str] | None = None,
+    ) -> bool:
+        if clarification_answers and clarification_answers.get("complaint_context", "").strip():
+            return True
+
+        lowered = self._normalize_text_for_parsing(text.lower())
+        if "complaint_context:" in lowered:
+            return True
+
+        return any(
+            token in lowered
+            for token in ["mri", "ct scan", "ultrasound", "x ray", "xray", "scan referral", "referral"]
+        )
 
     def _answered_clarification_ids(self, clarification_answers: Dict[str, str] | None) -> set[str]:
         if not clarification_answers:
@@ -519,6 +617,44 @@ class ReceptionistAgent:
                 seen.add(item)
                 ordered.append(item)
         return ordered
+
+    def _has_availability_signal(self, preferences: PatientPreferences) -> bool:
+        return any(
+            [
+                preferences.preferred_days,
+                preferences.excluded_days,
+                preferences.preferred_periods,
+                preferences.excluded_periods,
+                preferences.preferred_day_periods,
+                preferences.excluded_day_periods,
+            ]
+        )
+
+    def _should_ask_question(
+        self,
+        question: ClarificationQuestion,
+        preferences: PatientPreferences,
+        complaint_category: str,
+        raw_text: str,
+        duration_text: str | None,
+        clarification_answers: Dict[str, str] | None = None,
+    ) -> bool:
+        if question.question_id == "preferred_modality":
+            return (
+                not self._is_in_person_only_context(complaint_category, raw_text)
+                and not preferences.preferred_modalities
+                and not preferences.excluded_modalities
+            )
+        if question.question_id in {"availability", "availability_exclusion"}:
+            return not self._has_availability_signal(preferences)
+        if question.question_id == "complaint_context":
+            return complaint_category == "general_query" and not self._has_answered_complaint_context(
+                raw_text,
+                clarification_answers,
+            )
+        if question.question_id == "duration_text":
+            return not bool(duration_text)
+        return False
 
     def _build_normalized_llm_payload(
         self,
@@ -541,14 +677,25 @@ class ReceptionistAgent:
         api_key: str,
         model: str,
         request_input: List[Dict[str, str]],
+        base_url: str | None = None,
     ) -> str | None:
-        request_body = {
-            "model": model,
-            "input": request_input,
-            "temperature": 0,
-        }
+        use_chat = base_url is not None
+        if use_chat:
+            url = f"{base_url.rstrip('/')}/chat/completions"
+            request_body: Dict[str, Any] = {
+                "model": model,
+                "messages": request_input,
+                "temperature": 0,
+            }
+        else:
+            url = "https://api.openai.com/v1/responses"
+            request_body = {
+                "model": model,
+                "input": request_input,
+                "temperature": 0,
+            }
         request = urllib.request.Request(
-            "https://api.openai.com/v1/responses",
+            url,
             data=json.dumps(request_body).encode("utf-8"),
             headers={
                 "Authorization": f"Bearer {api_key}",
@@ -560,6 +707,8 @@ class ReceptionistAgent:
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
                 payload = json.loads(response.read().decode("utf-8"))
+            if use_chat:
+                return self._extract_chat_completions_text(payload)
             return self._extract_output_text_from_http_payload(payload)
         except urllib.error.HTTPError as exc:
             try:
@@ -603,6 +752,17 @@ class ReceptionistAgent:
                         parts.append(text)
 
         return "\n".join(parts).strip()
+
+    def _extract_chat_completions_text(self, payload: Dict[str, Any]) -> str:
+        """Extract text from an OpenAI-compatible chat completions response."""
+        choices = payload.get("choices", [])
+        if not isinstance(choices, list) or not choices:
+            return ""
+        message = choices[0].get("message", {})
+        if not isinstance(message, dict):
+            return ""
+        content = message.get("content", "")
+        return content if isinstance(content, str) else ""
 
     def _normalize_constraints(self, payload: Dict[str, Any]) -> List[str]:
         raw = payload.get("extracted_constraints_text", [])
@@ -932,7 +1092,10 @@ class ReceptionistAgent:
             complaint_category=complaint_category,
             raw_text=merged_text,
         )
-        if complaint_category == "general_query":
+        if complaint_category == "general_query" and not self._has_answered_complaint_context(
+            merged_text,
+            clarification_answers,
+        ):
             missing_fields = self._merge_unique_fields(["complaint_context"], missing_fields)
         answered_question_ids = self._answered_clarification_ids(clarification_answers)
         questions = self._clarification_questions_from_missing(
@@ -1127,7 +1290,24 @@ class ReceptionistAgent:
         for category, keywords in self.CATEGORY_KEYWORDS.items():
             if any(re.search(rf"\b{re.escape(keyword)}\b", lowered) for keyword in keywords):
                 return category
-        return "general_review" if any(token in lowered for token in ["review", "gp", "routine check"]) else "general_query"
+        return (
+            "general_review"
+            if any(
+                token in lowered
+                for token in [
+                    "review",
+                    "gp",
+                    "routine check",
+                    "mri",
+                    "ct scan",
+                    "ultrasound",
+                    "x ray",
+                    "xray",
+                    "referral",
+                ]
+            )
+            else "general_query"
+        )
 
     def _extract_duration(self, text: str) -> str | None:
         lowered = text.lower()
@@ -1153,7 +1333,25 @@ class ReceptionistAgent:
             if any(alias in normalized_raw for alias in aliases):
                 return category
 
-        return "general_review" if "review" in self._normalize_text_for_parsing(text.lower()) else "general_query"
+        normalized_text = self._normalize_text_for_parsing(text.lower())
+        return (
+            "general_review"
+            if any(
+                token in normalized_text
+                for token in [
+                    "review",
+                    "gp",
+                    "routine check",
+                    "mri",
+                    "ct scan",
+                    "ultrasound",
+                    "x ray",
+                    "xray",
+                    "referral",
+                ]
+            )
+            else "general_query"
+        )
 
     def _canonicalize_duration_text(self, raw_value: Any, text: str) -> str:
         normalized_text = self._normalize_text_for_parsing(text.lower())

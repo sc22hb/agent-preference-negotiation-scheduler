@@ -3,6 +3,7 @@ const state = {
   captureMode: "conversation",
   humanConversationMode: false,
   conversationBaseText: null,
+  clarificationAnswers: {},
   intakeSummary: null,
   routingDecision: null,
   preferences: null,
@@ -134,15 +135,19 @@ function addClarificationFormBubble(questions) {
 
   sendButton.addEventListener("click", async () => {
     const answers = {};
+    let missingAnswer = false;
     formEl.querySelectorAll("[data-clarify-id]").forEach((input) => {
       const value = input.value.trim();
-      if (value) {
-        answers[input.getAttribute("data-clarify-id")] = value;
+      const questionId = input.getAttribute("data-clarify-id");
+      if (!value) {
+        missingAnswer = true;
+      } else if (questionId) {
+        answers[questionId] = value;
       }
     });
 
-    if (Object.keys(answers).length === 0) {
-      addMessage("system", "System", "Please answer at least one clarification question.");
+    if (missingAnswer) {
+      addMessage("system", "System", "Please answer all clarification questions before continuing.");
       return;
     }
 
@@ -529,6 +534,7 @@ async function submitConversationIntake(clarificationAnswers, isFollowUp = false
       throw new Error("Please enter a message first.");
     }
     state.conversationBaseText = enteredText;
+    state.clarificationAnswers = {};
   }
 
   if (!isFollowUp) {
@@ -539,16 +545,22 @@ async function submitConversationIntake(clarificationAnswers, isFollowUp = false
     if (!state.runId) {
       throw new Error("Missing run id for intake refinement.");
     }
+    const mergedAnswers = {
+      ...state.clarificationAnswers,
+      ...clarificationAnswers,
+    };
+    state.clarificationAnswers = mergedAnswers;
     return postJson("/api/intake/refine", {
       run_id: state.runId,
-      clarification_answers: clarificationAnswers,
+      clarification_answers: mergedAnswers,
       ...buildExtractorFields("conversation"),
     });
   }
 
+  state.clarificationAnswers = { ...clarificationAnswers };
   return postJson("/api/intake", {
     user_text: state.conversationBaseText,
-    clarification_answers: clarificationAnswers,
+    clarification_answers: state.clarificationAnswers,
     ...buildExtractorFields("conversation"),
   });
 }
@@ -723,7 +735,10 @@ async function handleIntakeResponse(response) {
       return;
     }
 
-    addClarificationFormBubble(questions);
+    // Once we have enough required intake data, move into the scheduling flow.
+    // If no slot is feasible, the user should see a failure/relaxation path,
+    // not the same clarification questions again.
+    await runSchedulingRound(state.preferences);
     updateAdminView();
     return;
   }

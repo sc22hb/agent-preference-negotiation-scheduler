@@ -274,6 +274,7 @@ class RunState(BaseModel):
     safety: SafetyGateResult = Field(default_factory=lambda: SafetyGateResult(triggered=False))
     intake_summary: Optional[IntakeSummary] = None
     routing_decision: Optional[RoutingDecision] = None
+    clarification_answers: Dict[str, str] = Field(default_factory=dict)
     current_preferences: Optional[PatientPreferences] = None
     round_number: int = 0
     pending_relaxations: List[RelaxationQuestion] = Field(default_factory=list)

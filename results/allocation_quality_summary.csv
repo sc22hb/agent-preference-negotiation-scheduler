@@ -1,0 +1,2 @@
+total_profiles,successful_profiles,success_rate_pct,success_rate_ci_lower,success_rate_ci_upper,mean_utility_successes,utility_ci_lower,utility_ci_upper,median_utility_successes,stdev_utility_successes,p25_utility_successes,p75_utility_successes,p95_utility_successes
+72,65,90.28,83.33,95.83,87.614,82.0966,93.4531,78.4,23.801,77.177,108.088,131.585

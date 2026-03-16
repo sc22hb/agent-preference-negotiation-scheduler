@@ -48,10 +48,20 @@ class DemoOrchestrator:
         self.patient_agent = PatientAgent()
         self.allocator_agent = MasterAllocatorAgent()
 
+    def _normalize_clarification_answers(self, answers: dict[str, str]) -> dict[str, str]:
+        normalized: dict[str, str] = {}
+        for key, value in answers.items():
+            cleaned_key = key.strip()
+            cleaned_value = value.strip()
+            if cleaned_key and cleaned_value:
+                normalized[cleaned_key] = cleaned_value
+        return normalized
+
     def intake(self, payload: IntakeRequest) -> IntakeResponse:
         run = self._create_run()
         safety = self.safety_agent.assess(payload.user_text)
         run.safety = safety
+        run.clarification_answers = self._normalize_clarification_answers(payload.clarification_answers)
 
         if safety.triggered:
             run.status = "safety_escalation"
@@ -67,7 +77,7 @@ class DemoOrchestrator:
         intake_summary, questions, engine, llm_response = self.receptionist_agent.build_intake(
             run_id=run.run_id,
             user_text=payload.user_text,
-            clarification_answers=payload.clarification_answers,
+            clarification_answers=run.clarification_answers,
             extractor=payload.extractor,
             api_key=payload.api_key,
             llm_model=payload.llm_model,
@@ -92,9 +102,13 @@ class DemoOrchestrator:
         if run.intake_summary is None:
             raise ValueError("Cannot refine intake before initial intake exists")
 
+        merged_answers = dict(run.clarification_answers)
+        merged_answers.update(self._normalize_clarification_answers(payload.clarification_answers))
+        run.clarification_answers = merged_answers
+
         base_text = run.intake_summary.raw_text
         appended = " ".join(
-            f"{key}: {value}" for key, value in sorted(payload.clarification_answers.items()) if value.strip()
+            f"{key}: {value}" for key, value in sorted(merged_answers.items())
         )
         safety_text = f"{base_text} {appended}".strip()
         safety = self.safety_agent.assess(safety_text)
@@ -114,7 +128,7 @@ class DemoOrchestrator:
         intake_summary, questions, engine, llm_response = self.receptionist_agent.build_intake(
             run_id=run.run_id,
             user_text=base_text,
-            clarification_answers=payload.clarification_answers,
+            clarification_answers=merged_answers,
             extractor=payload.extractor,
             api_key=payload.api_key,
             llm_model=payload.llm_model,

@@ -250,7 +250,17 @@ class SlotInventoryResponse(BaseModel):
     hospital: str
     database_horizon_days: int
     database_build_count: int
+    stochastic_mode: bool = False
     services: Dict[str, List[SlotInventoryItem]] = Field(default_factory=dict)
+
+
+class RotaModeRequest(BaseModel):
+    stochastic_mode: bool = False
+
+
+class RotaModeResponse(BaseModel):
+    stochastic_mode: bool
+    database_build_count: int
 
 
 class ScheduleRelaxRequest(BaseModel):
@@ -267,6 +277,84 @@ class ScheduleRelaxResponse(BaseModel):
     applied_relaxations: List[str] = Field(default_factory=list)
     rejected_relaxations: List[str] = Field(default_factory=list)
     message: str
+
+
+BatchConflictPolicy = Literal["input_order", "scarcity_first"]
+
+
+class MultiSchedulePatientRequest(BaseModel):
+    patient_id: str = Field(min_length=1)
+    intake_summary: Optional[IntakeSummary] = None
+    reason_code: Optional[FormReason] = None
+    preferences: Optional[PatientPreferences] = None
+    routing_decision: Optional[RoutingDecision] = None
+
+    @model_validator(mode="after")
+    def validate_patient_source(self) -> "MultiSchedulePatientRequest":
+        has_structured_intake = self.intake_summary is not None
+        has_form_payload = self.reason_code is not None and self.preferences is not None
+
+        if not has_structured_intake and not has_form_payload:
+            raise ValueError("Each patient requires either intake_summary or reason_code plus preferences")
+        return self
+
+
+class MultiSchedulePatientResult(BaseModel):
+    patient_id: str
+    run_id: str
+    input_position: int
+    assigned_round: Optional[int] = None
+    initial_candidate_count: int
+    initial_feasible_count: int
+    status: RunStatus
+    routing_decision: RoutingDecision
+    booking: Optional[BookingOffer] = None
+    blocker_summary: Optional[BlockerSummary] = None
+    candidate_count_last_round: int = 0
+    feasible_count_last_round: int = 0
+
+
+class MultiScheduleBid(BaseModel):
+    patient_id: str
+    slot_id: str
+    utility: float
+    feasible_count: int
+    input_position: int
+
+
+class MultiScheduleRoundResult(BaseModel):
+    round_number: int
+    bids: List[MultiScheduleBid] = Field(default_factory=list)
+    assigned_patient_ids: List[str] = Field(default_factory=list)
+    assigned_slot_ids: List[str] = Field(default_factory=list)
+    exhausted_patient_ids: List[str] = Field(default_factory=list)
+
+
+class MultiScheduleRequest(BaseModel):
+    patients: List[MultiSchedulePatientRequest] = Field(default_factory=list)
+    conflict_policy: BatchConflictPolicy = "scarcity_first"
+
+    @model_validator(mode="after")
+    def validate_patients(self) -> "MultiScheduleRequest":
+        if not self.patients:
+            raise ValueError("At least one patient is required")
+
+        patient_ids = [patient.patient_id for patient in self.patients]
+        if len(set(patient_ids)) != len(patient_ids):
+            raise ValueError("patient_id values must be unique within a batch")
+        return self
+
+
+class MultiScheduleResponse(BaseModel):
+    strategy: Literal["auction"] = "auction"
+    conflict_policy: BatchConflictPolicy
+    rounds_run: int
+    total_patients: int
+    booked_patients: int
+    unbooked_patients: int
+    assignments: List[MultiSchedulePatientResult] = Field(default_factory=list)
+    reserved_slot_ids: List[str] = Field(default_factory=list)
+    rounds: List[MultiScheduleRoundResult] = Field(default_factory=list)
 
 
 class RunState(BaseModel):

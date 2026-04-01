@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List
 from uuid import uuid4
@@ -20,6 +21,14 @@ from nhs_demo.schemas import (
     IntakeRefineRequest,
     IntakeResponse,
     IntakeSummary,
+    MultiScheduleBid,
+    MultiSchedulePatientRequest,
+    MultiSchedulePatientResult,
+    MultiScheduleRequest,
+    MultiScheduleRoundResult,
+    MultiScheduleResponse,
+    PatientPreferences,
+    RotaModeResponse,
     RouteRequest,
     RoutingDecision,
     RouteResponse,
@@ -34,6 +43,28 @@ from nhs_demo.schemas import (
     SlotInventoryItem,
     SlotInventoryResponse,
 )
+
+
+@dataclass
+class _BatchPatientContext:
+    patient_id: str
+    input_position: int
+    run_id: str
+    intake_summary: IntakeSummary
+    routing_decision: RoutingDecision
+    preferences: PatientPreferences
+    initial_candidate_count: int
+    initial_feasible_count: int
+
+
+@dataclass
+class _BatchBid:
+    patient: _BatchPatientContext
+    booking: object
+    utility: float
+    feasible_count: int
+    candidate_count: int
+    blocker_summary: object
 
 
 class DemoOrchestrator:
@@ -273,7 +304,7 @@ class DemoOrchestrator:
             run.pending_relaxations = []
             run.round_audits.append(audit_round)
             self._save_run(run)
-            return ScheduleOfferResponse(
+            response = ScheduleOfferResponse(
                 run_id=run.run_id,
                 status=run.status,
                 round_number=run.round_number,
@@ -282,6 +313,8 @@ class DemoOrchestrator:
                 blocker_summary=allocation.blocker_summary,
                 message="Booking found.",
             )
+            self._rotate_rota_after_completed_run()
+            return response
 
         if run.round_number >= MAX_NEGOTIATION_ROUNDS:
             run.status = "failed"
@@ -289,7 +322,7 @@ class DemoOrchestrator:
             run.pending_relaxations = []
             run.round_audits.append(audit_round)
             self._save_run(run)
-            return ScheduleOfferResponse(
+            response = ScheduleOfferResponse(
                 run_id=run.run_id,
                 status=run.status,
                 round_number=run.round_number,
@@ -297,6 +330,8 @@ class DemoOrchestrator:
                 blocker_summary=allocation.blocker_summary,
                 message=run.failure_reason,
             )
+            self._rotate_rota_after_completed_run()
+            return response
 
         proposed_relaxations = self.patient_agent.propose_relaxations(
             routing=payload.routing_decision,
@@ -313,7 +348,7 @@ class DemoOrchestrator:
             run.failure_reason = "No additional safe relaxations available"
             run.pending_relaxations = []
             self._save_run(run)
-            return ScheduleOfferResponse(
+            response = ScheduleOfferResponse(
                 run_id=run.run_id,
                 status=run.status,
                 round_number=run.round_number,
@@ -321,6 +356,8 @@ class DemoOrchestrator:
                 blocker_summary=allocation.blocker_summary,
                 message=run.failure_reason,
             )
+            self._rotate_rota_after_completed_run()
+            return response
 
         run.status = "needs_relaxation"
         run.pending_relaxations = relaxation_questions
@@ -445,6 +482,149 @@ class DemoOrchestrator:
             message=message,
         )
 
+    def schedule_many(self, payload: MultiScheduleRequest) -> MultiScheduleResponse:
+        batch = [
+            self._prepare_batch_patient(item, input_position=index)
+            for index, item in enumerate(payload.patients, start=1)
+        ]
+        reserved_slot_ids: set[str] = set()
+        rounds = []
+        pending = {patient.patient_id: patient for patient in batch}
+        final_results: dict[str, MultiSchedulePatientResult] = {}
+        round_number = 0
+
+        while pending:
+            round_number += 1
+            round_bids: dict[str, List[_BatchBid]] = {}
+            exhausted_patient_ids: List[str] = []
+
+            for patient_id in list(pending.keys()):
+                patient = pending[patient_id]
+                candidate_slots = self._available_candidate_slots(
+                    patient.routing_decision,
+                    patient.preferences,
+                    reserved_slot_ids,
+                )
+                allocation = self.allocator_agent.allocate(
+                    routing=patient.routing_decision,
+                    preferences=patient.preferences,
+                    candidate_slots=candidate_slots,
+                    patient_agent=self.patient_agent,
+                )
+                feasible_count = sum(1 for item in allocation.candidate_evaluations if item.feasible)
+
+                if allocation.booking is None:
+                    final_results[patient.patient_id] = MultiSchedulePatientResult(
+                        patient_id=patient.patient_id,
+                        run_id=patient.run_id,
+                        input_position=patient.input_position,
+                        assigned_round=None,
+                        initial_candidate_count=patient.initial_candidate_count,
+                        initial_feasible_count=patient.initial_feasible_count,
+                        status="failed",
+                        routing_decision=patient.routing_decision,
+                        booking=None,
+                        blocker_summary=allocation.blocker_summary,
+                        candidate_count_last_round=len(candidate_slots),
+                        feasible_count_last_round=feasible_count,
+                    )
+                    exhausted_patient_ids.append(patient.patient_id)
+                    pending.pop(patient.patient_id, None)
+                    continue
+
+                bid = _BatchBid(
+                    patient=patient,
+                    booking=allocation.booking,
+                    utility=allocation.booking.utility,
+                    feasible_count=feasible_count,
+                    candidate_count=len(candidate_slots),
+                    blocker_summary=allocation.blocker_summary,
+                )
+                round_bids.setdefault(allocation.booking.slot_id, []).append(bid)
+
+            if not round_bids:
+                rounds.append(
+                    MultiScheduleRoundResult(
+                        round_number=round_number,
+                        bids=[],
+                        assigned_patient_ids=[],
+                        assigned_slot_ids=[],
+                        exhausted_patient_ids=sorted(exhausted_patient_ids),
+                    )
+                )
+                break
+
+            assigned_patient_ids: List[str] = []
+            assigned_slot_ids: List[str] = []
+            round_bid_records = []
+
+            for slot_id in sorted(round_bids):
+                bids = round_bids[slot_id]
+                for bid in bids:
+                    round_bid_records.append(
+                        MultiScheduleBid(
+                            patient_id=bid.patient.patient_id,
+                            slot_id=slot_id,
+                            utility=bid.utility,
+                            feasible_count=bid.feasible_count,
+                            input_position=bid.patient.input_position,
+                        )
+                    )
+
+                winning_bid = self._select_batch_winner(
+                    bids=bids,
+                    conflict_policy=payload.conflict_policy,
+                )
+                reserved_slot_ids.add(slot_id)
+                assigned_patient_ids.append(winning_bid.patient.patient_id)
+                assigned_slot_ids.append(slot_id)
+                final_results[winning_bid.patient.patient_id] = MultiSchedulePatientResult(
+                    patient_id=winning_bid.patient.patient_id,
+                    run_id=winning_bid.patient.run_id,
+                    input_position=winning_bid.patient.input_position,
+                    assigned_round=round_number,
+                    initial_candidate_count=winning_bid.patient.initial_candidate_count,
+                    initial_feasible_count=winning_bid.patient.initial_feasible_count,
+                    status="booked",
+                    routing_decision=winning_bid.patient.routing_decision,
+                    booking=winning_bid.booking,
+                    blocker_summary=winning_bid.blocker_summary,
+                    candidate_count_last_round=winning_bid.candidate_count,
+                    feasible_count_last_round=winning_bid.feasible_count,
+                )
+                pending.pop(winning_bid.patient.patient_id, None)
+
+            rounds.append(
+                MultiScheduleRoundResult(
+                    round_number=round_number,
+                    bids=sorted(
+                        round_bid_records,
+                        key=lambda bid: (bid.slot_id, bid.input_position, bid.patient_id),
+                    ),
+                    assigned_patient_ids=sorted(assigned_patient_ids),
+                    assigned_slot_ids=sorted(assigned_slot_ids),
+                    exhausted_patient_ids=sorted(exhausted_patient_ids),
+                )
+            )
+
+        assignments = [
+            final_results[patient.patient_id]
+            for patient in sorted(batch, key=lambda item: item.input_position)
+        ]
+        booked_patients = sum(1 for item in assignments if item.booking is not None)
+        response = MultiScheduleResponse(
+            conflict_policy=payload.conflict_policy,
+            rounds_run=round_number,
+            total_patients=len(assignments),
+            booked_patients=booked_patients,
+            unbooked_patients=len(assignments) - booked_patients,
+            assignments=assignments,
+            reserved_slot_ids=sorted(reserved_slot_ids),
+            rounds=rounds,
+        )
+        self._rotate_rota_after_completed_run()
+        return response
+
     def audit(self, run_id: str) -> AuditLog:
         run = self._get_run(run_id)
         return AuditLog(
@@ -489,8 +669,19 @@ class DemoOrchestrator:
             hospital=self.rota_agent.HOSPITAL_NAME,
             database_horizon_days=self.rota_agent.database_horizon_days,
             database_build_count=self.rota_agent.database_build_count,
+            stochastic_mode=self.rota_agent.stochastic_mode,
             services=services,
         )
+
+    def rota_mode(self) -> RotaModeResponse:
+        return RotaModeResponse(
+            stochastic_mode=self.rota_agent.stochastic_mode,
+            database_build_count=self.rota_agent.database_build_count,
+        )
+
+    def set_rota_mode(self, stochastic_mode: bool) -> RotaModeResponse:
+        self.rota_agent.set_stochastic_mode(stochastic_mode)
+        return self.rota_mode()
 
     def get_run_state(self, run_id: str) -> RunState:
         return self._get_run(run_id)
@@ -509,6 +700,132 @@ class DemoOrchestrator:
     def _save_run(self, run: RunState) -> None:
         run.updated_at = datetime.now(timezone.utc)
         self._runs[run.run_id] = run
+
+    def _rotate_rota_after_completed_run(self) -> None:
+        self.rota_agent.rotate_inventory()
+
+    def _prepare_batch_patient(
+        self,
+        payload: MultiSchedulePatientRequest,
+        input_position: int,
+    ) -> _BatchPatientContext:
+        if payload.intake_summary is not None:
+            run_id = self.create_structured_run(
+                intake_summary=payload.intake_summary,
+                routing_decision=payload.routing_decision,
+            )
+            intake_for_run = payload.intake_summary.model_copy(update={"run_id": run_id})
+        else:
+            if payload.reason_code is None or payload.preferences is None:
+                raise ValueError(
+                    "Each batch patient requires either intake_summary or reason_code plus preferences"
+                )
+            run = self._create_run()
+            run.safety = self.safety_agent.assess(payload.reason_code.replace("_", " "))
+            if run.safety.triggered:
+                run.status = "safety_escalation"
+                run.failure_reason = "Safety gate triggered"
+                self._save_run(run)
+                raise ValueError(f"Safety gate triggered for batch patient: {payload.patient_id}")
+
+            intake_summary, _questions, _engine, _llm_response = self.receptionist_agent.build_form_intake(
+                run_id=run.run_id,
+                reason_code=payload.reason_code,
+                preferences=payload.preferences,
+                extractor="rule",
+                api_key=None,
+                llm_model=None,
+            )
+            run.intake_summary = intake_summary
+            run.current_preferences = intake_summary.preferences
+            self._save_run(run)
+            run_id = run.run_id
+            intake_for_run = intake_summary
+
+        if payload.routing_decision is not None:
+            routing_decision = payload.routing_decision.model_copy(update={"run_id": run_id})
+        else:
+            route_response = self.route(
+                RouteRequest(run_id=run_id, intake_summary=intake_for_run)
+            )
+            routing_decision = route_response.routing_decision
+
+        preferences = intake_for_run.preferences
+        candidate_slots = self._available_candidate_slots(
+            routing_decision,
+            preferences,
+            reserved_slot_ids=set(),
+        )
+        initial_feasible_count = self._feasible_candidate_count(
+            routing_decision,
+            preferences,
+            candidate_slots,
+        )
+        return _BatchPatientContext(
+            patient_id=payload.patient_id,
+            input_position=input_position,
+            run_id=run_id,
+            intake_summary=intake_for_run,
+            routing_decision=routing_decision,
+            preferences=preferences,
+            initial_candidate_count=len(candidate_slots),
+            initial_feasible_count=initial_feasible_count,
+        )
+
+    def _select_batch_winner(
+        self,
+        bids: List[_BatchBid],
+        conflict_policy: str,
+    ) -> _BatchBid:
+        if conflict_policy == "input_order":
+            return sorted(
+                bids,
+                key=lambda bid: (
+                    -bid.utility,
+                    bid.patient.input_position,
+                    bid.feasible_count,
+                    bid.patient.patient_id,
+                ),
+            )[0]
+
+        return sorted(
+            bids,
+            key=lambda bid: (
+                -bid.utility,
+                bid.feasible_count,
+                bid.patient.input_position,
+                bid.patient.patient_id,
+            ),
+        )[0]
+
+    def _available_candidate_slots(
+        self,
+        routing_decision: RoutingDecision,
+        preferences: PatientPreferences,
+        reserved_slot_ids: set[str],
+    ) -> List[Slot]:
+        candidate_horizon = max(
+            preferences.date_horizon_days + DATE_RANGE_EXTENSION_DAYS,
+            DEFAULT_DATE_HORIZON_DAYS + DATE_RANGE_EXTENSION_DAYS,
+        )
+        candidate_slots = self.rota_agent.generate_slots(routing_decision, candidate_horizon)
+        if not reserved_slot_ids:
+            return candidate_slots
+        return [slot for slot in candidate_slots if slot.slot_id not in reserved_slot_ids]
+
+    def _feasible_candidate_count(
+        self,
+        routing_decision: RoutingDecision,
+        preferences: PatientPreferences,
+        candidate_slots: List[Slot],
+    ) -> int:
+        allocation = self.allocator_agent.allocate(
+            routing=routing_decision,
+            preferences=preferences,
+            candidate_slots=candidate_slots,
+            patient_agent=self.patient_agent,
+        )
+        return sum(1 for item in allocation.candidate_evaluations if item.feasible)
 
     def _build_slot_scores(
         self,

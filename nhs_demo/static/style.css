@@ -709,6 +709,254 @@ button:disabled,
   align-self: start;
 }
 
+.admin-batch-card {
+  display: grid;
+  gap: 0.8rem;
+  margin: 1rem 0 1.2rem;
+  padding: 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.compact-row {
+  margin-bottom: 0;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-weight: 600;
+}
+
+.toggle-row input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.batch-patient-rows {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.batch-patient-row {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.batch-patient-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.batch-patient-row-title {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.batch-patient-row-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.65rem;
+}
+
+.danger-button {
+  border-color: rgba(182, 73, 66, 0.25);
+  background: transparent;
+  color: var(--danger);
+  box-shadow: none;
+}
+
+.danger-button:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+.batch-summary-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.batch-summary-line:last-child {
+  border-bottom: none;
+}
+
+.batch-summary-line strong {
+  font-size: 0.86rem;
+}
+
+.batch-result-empty {
+  margin: 0;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.batch-result-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.batch-result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.6rem;
+}
+
+.batch-metric {
+  padding: 0.75rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.batch-metric-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.batch-metric-value {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.batch-section {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.batch-section-title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.batch-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.batch-card {
+  padding: 0.8rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.batch-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.batch-card-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.batch-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.batch-badge.booked {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.batch-badge.failed {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.batch-card-meta {
+  display: grid;
+  gap: 0.2rem;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.batch-round-bids {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.batch-bid-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 12px;
+  background: rgba(245, 248, 250, 0.9);
+  color: var(--text);
+}
+
+.batch-bid-row.winner {
+  background: linear-gradient(180deg, rgba(223, 243, 232, 0.96), rgba(255, 255, 255, 0.94));
+  border: 1px solid rgba(24, 121, 78, 0.14);
+}
+
+.batch-bid-main {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.batch-bid-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.batch-bid-meta {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.batch-bid-score {
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
 .side-card h2,
 .side-card h3 {
   margin: 0.2rem 0 0.6rem;

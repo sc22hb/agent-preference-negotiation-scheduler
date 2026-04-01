@@ -131,7 +131,6 @@ const runIdView = document.getElementById("runIdView");
 const adminRunIdView = document.getElementById("adminRunIdView");
 const rotaStochasticModeToggle = document.getElementById("rotaStochasticMode");
 const rotaModeStatus = document.getElementById("rotaModeStatus");
-const batchConflictPolicySelect = document.getElementById("batchConflictPolicy");
 const batchPatientRows = document.getElementById("batchPatientRows");
 const addBatchPatientButton = document.getElementById("btnAddBatchPatient");
 const loadBatchExampleButton = document.getElementById("btnLoadBatchExample");
@@ -1292,7 +1291,6 @@ function renderBatchResult(batchResponse) {
   const metrics = document.createElement("div");
   metrics.className = "batch-result-grid";
   metrics.appendChild(createBatchMetric("Strategy", titleCase(batchResponse.strategy || "auction")));
-  metrics.appendChild(createBatchMetric("Conflict rule", titleCase(batchResponse.conflict_policy)));
   metrics.appendChild(createBatchMetric("Rounds", String(batchResponse.rounds_run)));
   metrics.appendChild(createBatchMetric("Booked", `${batchResponse.booked_patients}/${batchResponse.total_patients}`));
   adminBatchResult.appendChild(metrics);
@@ -1308,7 +1306,6 @@ async function runBatchBooking() {
   }
 
   const batchResponse = await postJson("/api/schedule/multi", {
-    conflict_policy: batchConflictPolicySelect?.value || "scarcity_first",
     patients,
   });
 
@@ -1318,7 +1315,7 @@ async function runBatchBooking() {
   addMessage(
     "assistant",
     "Assistant",
-    `Batch auction complete. ${batchResponse.booked_patients} of ${batchResponse.total_patients} patients were booked using ${titleCase(batchResponse.conflict_policy)} conflict resolution.`
+    `Batch auction complete. ${batchResponse.booked_patients} of ${batchResponse.total_patients} patients were booked.`
   );
 }
 

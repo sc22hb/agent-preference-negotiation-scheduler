@@ -1,4 +1,0 @@
-constraint_pressure_band,total_profiles,successful_profiles,success_rate_pct,mean_utility_successes,median_utility_successes
-low,30,30,100.0,77.833,77.6
-medium,30,29,96.67,88.629,107.6
-high,12,6,50.0,131.618,131.613

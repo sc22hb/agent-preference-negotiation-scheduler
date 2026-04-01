@@ -571,10 +571,7 @@ class DemoOrchestrator:
                         )
                     )
 
-                winning_bid = self._select_batch_winner(
-                    bids=bids,
-                    conflict_policy=payload.conflict_policy,
-                )
+                winning_bid = self._select_batch_winner(bids)
                 reserved_slot_ids.add(slot_id)
                 assigned_patient_ids.append(winning_bid.patient.patient_id)
                 assigned_slot_ids.append(slot_id)
@@ -613,7 +610,6 @@ class DemoOrchestrator:
         ]
         booked_patients = sum(1 for item in assignments if item.booking is not None)
         response = MultiScheduleResponse(
-            conflict_policy=payload.conflict_policy,
             rounds_run=round_number,
             total_patients=len(assignments),
             booked_patients=booked_patients,
@@ -775,19 +771,7 @@ class DemoOrchestrator:
     def _select_batch_winner(
         self,
         bids: List[_BatchBid],
-        conflict_policy: str,
     ) -> _BatchBid:
-        if conflict_policy == "input_order":
-            return sorted(
-                bids,
-                key=lambda bid: (
-                    -bid.utility,
-                    bid.patient.input_position,
-                    bid.feasible_count,
-                    bid.patient.patient_id,
-                ),
-            )[0]
-
         return sorted(
             bids,
             key=lambda bid: (

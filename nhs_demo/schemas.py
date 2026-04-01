@@ -279,9 +279,6 @@ class ScheduleRelaxResponse(BaseModel):
     message: str
 
 
-BatchConflictPolicy = Literal["input_order", "scarcity_first"]
-
-
 class MultiSchedulePatientRequest(BaseModel):
     patient_id: str = Field(min_length=1)
     intake_summary: Optional[IntakeSummary] = None
@@ -332,7 +329,6 @@ class MultiScheduleRoundResult(BaseModel):
 
 class MultiScheduleRequest(BaseModel):
     patients: List[MultiSchedulePatientRequest] = Field(default_factory=list)
-    conflict_policy: BatchConflictPolicy = "scarcity_first"
 
     @model_validator(mode="after")
     def validate_patients(self) -> "MultiScheduleRequest":
@@ -347,7 +343,6 @@ class MultiScheduleRequest(BaseModel):
 
 class MultiScheduleResponse(BaseModel):
     strategy: Literal["auction"] = "auction"
-    conflict_policy: BatchConflictPolicy
     rounds_run: int
     total_patients: int
     booked_patients: int

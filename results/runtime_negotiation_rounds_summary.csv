@@ -1,5 +1,0 @@
-target_round_bucket,observed_negotiation_rounds,final_outcomes,mean_runtime_ms,median_runtime_ms,p95_runtime_ms,max_runtime_ms,note
-0,0,booked,0.747,0.679,0.919,2.271,
-1,1,booked,1.185,1.015,1.453,7.761,
-2,2,booked,1.391,1.32,1.797,3.211,
-3,2,failed,1.286,1.134,1.381,7.851,True third relaxation cycle is unreachable under MAX_NEGOTIATION_ROUNDS=3; this bucket represents runs that exhaust the three-offer-round budget.

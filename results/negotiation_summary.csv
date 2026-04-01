@@ -1,2 +1,0 @@
-total_cases,successful_cases,success_rate_pct,success_rate_ci_lower,success_rate_ci_upper,mean_rounds,relax_excluded_periods_count,relax_excluded_days_count,relax_excluded_modalities_count,extend_date_horizon_count
-40,40,100.0,100.0,100.0,1.175,20,20,15,39

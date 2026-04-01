@@ -1,2 +1,0 @@
-total_cases,accept_all_success_rate_pct,accept_all_ci_lower,accept_all_ci_upper,accept_first_success_rate_pct,reject_all_success_rate_pct,reject_all_ci_lower,reject_all_ci_upper,accept_all_vs_reject_gap_pct,accept_all_vs_accept_first_gap_pct
-40,100.0,100.0,100.0,80.0,2.5,0.0,7.5,97.5,20.0

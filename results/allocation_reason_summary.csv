@@ -1,7 +1,0 @@
-reason_code,total_profiles,successful_profiles,success_rate_pct,mean_utility_successes,median_utility_successes
-admin_request,12,10,83.33,89.824,78.7
-blood_test,12,11,91.67,92.111,79.0
-general_review,12,11,91.67,86.74,78.322
-persistent_cough,12,11,91.67,86.74,78.322
-repeat_prescription,12,11,91.67,83.733,78.4
-uti_symptoms,12,11,91.67,86.74,78.322

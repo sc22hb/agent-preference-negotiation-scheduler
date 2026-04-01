@@ -1,6 +1,99 @@
 const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 const PERIOD_ORDER = ["morning", "afternoon", "evening"];
 const MODALITY_ORDER = ["in_person", "phone", "video"];
+const FORM_REASON_OPTIONS = [
+  { value: "repeat_prescription", label: "Repeat prescription" },
+  { value: "blood_test", label: "Blood test" },
+  { value: "persistent_cough", label: "Persistent cough" },
+  { value: "uti_symptoms", label: "UTI symptoms" },
+  { value: "sore_throat", label: "Sore throat" },
+  { value: "admin_request", label: "Admin request" },
+  { value: "general_review", label: "General review" },
+];
+const BATCH_PROFILE_OPTIONS = [
+  { value: "flexible_standard", label: "Flexible standard" },
+  { value: "flexible_remote", label: "Flexible remote" },
+  { value: "strict_phone_mornings", label: "Strict phone mornings" },
+  { value: "strict_wed_video", label: "Strict Wed video" },
+  { value: "strict_in_person_short", label: "Strict in-person short horizon" },
+];
+const BATCH_PROFILE_PRESETS = {
+  flexible_standard: {
+    preferred_modalities: ["phone", "video", "in_person"],
+    preferred_days: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+    preferred_day_periods: [
+      { day: "Mon", period: "morning" },
+      { day: "Thu", period: "afternoon" },
+    ],
+    date_horizon_days: 12,
+    soonest_weight: 55,
+    flexibility: {
+      allow_time_relax: true,
+      allow_modality_relax: true,
+      allow_date_horizon_relax: true,
+    },
+  },
+  flexible_remote: {
+    preferred_modalities: ["phone", "video"],
+    preferred_days: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+    preferred_day_periods: [
+      { day: "Tue", period: "afternoon" },
+      { day: "Fri", period: "evening" },
+    ],
+    excluded_modalities: ["in_person"],
+    date_horizon_days: 14,
+    soonest_weight: 45,
+    flexibility: {
+      allow_time_relax: true,
+      allow_modality_relax: true,
+      allow_date_horizon_relax: true,
+    },
+  },
+  strict_phone_mornings: {
+    preferred_modalities: ["phone"],
+    preferred_days: ["Mon", "Wed", "Fri"],
+    preferred_periods: ["morning"],
+    excluded_periods: ["afternoon", "evening"],
+    date_horizon_days: 7,
+    soonest_weight: 75,
+    flexibility: {
+      allow_time_relax: true,
+      allow_modality_relax: true,
+      allow_date_horizon_relax: true,
+    },
+  },
+  strict_wed_video: {
+    preferred_modalities: ["video"],
+    excluded_modalities: ["in_person", "phone"],
+    preferred_days: ["Wed"],
+    excluded_days: ["Mon", "Tue", "Thu", "Fri"],
+    preferred_periods: ["morning"],
+    excluded_periods: ["afternoon", "evening"],
+    preferred_day_periods: [{ day: "Wed", period: "morning" }],
+    date_horizon_days: 10,
+    soonest_weight: 60,
+    flexibility: {
+      allow_time_relax: true,
+      allow_modality_relax: true,
+      allow_date_horizon_relax: true,
+    },
+  },
+  strict_in_person_short: {
+    preferred_modalities: ["in_person"],
+    excluded_modalities: ["phone", "video"],
+    preferred_days: ["Tue", "Thu"],
+    excluded_days: ["Mon", "Wed", "Fri"],
+    preferred_periods: ["morning"],
+    excluded_periods: ["afternoon", "evening"],
+    date_horizon_days: 4,
+    soonest_weight: 82,
+    flexibility: {
+      allow_time_relax: true,
+      allow_modality_relax: true,
+      allow_date_horizon_relax: true,
+    },
+  },
+};
 
 const state = {
   runId: null,
@@ -19,6 +112,7 @@ const state = {
     relaxTrail: [],
     latestSlotScores: [],
     rotaTimetable: null,
+    batchResult: null,
   },
 };
 
@@ -30,10 +124,18 @@ const adminScheduling = document.getElementById("adminScheduling");
 const adminRelaxTrail = document.getElementById("adminRelaxTrail");
 const adminSlotScores = document.getElementById("adminSlotScores");
 const adminRotaTimetable = document.getElementById("adminRotaTimetable");
+const adminBatchResult = document.getElementById("adminBatchResult");
 const auditPageLink = document.getElementById("auditPageLink");
 const auditJsonLink = document.getElementById("auditJsonLink");
 const runIdView = document.getElementById("runIdView");
 const adminRunIdView = document.getElementById("adminRunIdView");
+const rotaStochasticModeToggle = document.getElementById("rotaStochasticMode");
+const rotaModeStatus = document.getElementById("rotaModeStatus");
+const batchConflictPolicySelect = document.getElementById("batchConflictPolicy");
+const batchPatientRows = document.getElementById("batchPatientRows");
+const addBatchPatientButton = document.getElementById("btnAddBatchPatient");
+const loadBatchExampleButton = document.getElementById("btnLoadBatchExample");
+const runBatchButton = document.getElementById("btnRunBatch");
 
 const pageEyebrow = document.getElementById("pageEyebrow");
 const pageTitle = document.getElementById("pageTitle");
@@ -93,6 +195,26 @@ function titleCase(value) {
   return String(value || "")
     .replace(/_/g, " ")
     .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function deepClone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function buildBatchProfilePreferences(profileKey) {
+  return deepClone(BATCH_PROFILE_PRESETS[profileKey] || BATCH_PROFILE_PRESETS.flexible_standard);
+}
+
+function batchReasonOptionsMarkup(selectedValue) {
+  return FORM_REASON_OPTIONS.map((option) => (
+    `<option value="${option.value}"${option.value === selectedValue ? " selected" : ""}>${option.label}</option>`
+  )).join("");
+}
+
+function batchProfileOptionsMarkup(selectedValue) {
+  return BATCH_PROFILE_OPTIONS.map((option) => (
+    `<option value="${option.value}"${option.value === selectedValue ? " selected" : ""}>${option.label}</option>`
+  )).join("");
 }
 
 function prettifyModality(modality) {
@@ -162,6 +284,18 @@ function updateFormSliderLabels() {
 
 function isFriendlyMode() {
   return state.viewMode === "user" || Boolean(state.humanConversationMode);
+}
+
+function updateRotaModeControls(payload) {
+  const stochasticMode = Boolean(payload?.stochastic_mode);
+  if (rotaStochasticModeToggle) {
+    rotaStochasticModeToggle.checked = stochasticMode;
+  }
+  if (rotaModeStatus) {
+    rotaModeStatus.textContent = stochasticMode
+      ? "Dynamic mode: the rota regenerates after each completed booking run."
+      : "Stable mode: the rota stays fixed until the day changes.";
+  }
 }
 
 function getLatestSchedulingResponse() {
@@ -289,6 +423,10 @@ function renderAdminTranscript() {
         JSON.stringify(relaxation, null, 2)
       );
     });
+  }
+
+  if (state.admin.batchResult) {
+    appendAdminDebugMessage("Batch Booking Result", JSON.stringify(state.admin.batchResult, null, 2));
   }
 }
 
@@ -882,6 +1020,308 @@ function addRelaxationFormBubble(questions, blockerSummary, currentPreferences) 
   thread.scrollTop = thread.scrollHeight;
 }
 
+function renumberBatchRows() {
+  if (!batchPatientRows) {
+    return;
+  }
+  Array.from(batchPatientRows.querySelectorAll("[data-batch-row]")).forEach((row, index) => {
+    const title = row.querySelector("[data-batch-title]");
+    if (title) {
+      title.textContent = `Patient ${index + 1}`;
+    }
+  });
+}
+
+function createBatchPatientRow(initial = {}) {
+  if (!batchPatientRows) {
+    return;
+  }
+
+  const patientIndex = batchPatientRows.querySelectorAll("[data-batch-row]").length + 1;
+  const row = document.createElement("div");
+  row.className = "batch-patient-row";
+  row.setAttribute("data-batch-row", "true");
+
+  const patientId = initial.patient_id || `patient-${patientIndex}`;
+  const reasonCode = initial.reason_code || "general_review";
+  const profileKey = initial.profile_key || "flexible_standard";
+
+  row.innerHTML = `
+    <div class="batch-patient-row-header">
+      <p class="batch-patient-row-title" data-batch-title>Patient ${patientIndex}</p>
+      <button type="button" class="secondary-button danger-button" data-batch-remove>Remove</button>
+    </div>
+    <div class="batch-patient-row-grid">
+      <label>
+        Patient ID
+        <input type="text" data-batch-patient-id value="${patientId}" />
+      </label>
+      <label>
+        Reason
+        <select data-batch-reason-code>
+          ${batchReasonOptionsMarkup(reasonCode)}
+        </select>
+      </label>
+      <label>
+        Preference profile
+        <select data-batch-profile-key>
+          ${batchProfileOptionsMarkup(profileKey)}
+        </select>
+      </label>
+    </div>
+  `;
+
+  row.querySelector("[data-batch-remove]")?.addEventListener("click", () => {
+    row.remove();
+    renumberBatchRows();
+  });
+
+  batchPatientRows.appendChild(row);
+  renumberBatchRows();
+}
+
+function loadBatchDemoRows() {
+  if (!batchPatientRows) {
+    return;
+  }
+  batchPatientRows.innerHTML = "";
+  [
+    { patient_id: "alex", reason_code: "general_review", profile_key: "strict_wed_video" },
+    { patient_id: "blair", reason_code: "admin_request", profile_key: "flexible_remote" },
+    { patient_id: "casey", reason_code: "blood_test", profile_key: "strict_in_person_short" },
+    { patient_id: "dev", reason_code: "repeat_prescription", profile_key: "flexible_standard" },
+  ].forEach((patient) => createBatchPatientRow(patient));
+}
+
+function collectBatchPatients() {
+  if (!batchPatientRows) {
+    return [];
+  }
+
+  const seenIds = new Set();
+  return Array.from(batchPatientRows.querySelectorAll("[data-batch-row]")).map((row, index) => {
+    const patientId = row.querySelector("[data-batch-patient-id]")?.value.trim();
+    const reasonCode = row.querySelector("[data-batch-reason-code]")?.value;
+    const profileKey = row.querySelector("[data-batch-profile-key]")?.value;
+
+    if (!patientId) {
+      throw new Error(`Batch patient ${index + 1} is missing a patient ID.`);
+    }
+    if (seenIds.has(patientId)) {
+      throw new Error(`Duplicate patient ID in batch: ${patientId}`);
+    }
+    seenIds.add(patientId);
+
+    return {
+      patient_id: patientId,
+      reason_code: reasonCode,
+      preferences: buildBatchProfilePreferences(profileKey),
+    };
+  });
+}
+
+function createBatchMetric(label, value) {
+  const card = document.createElement("div");
+  card.className = "batch-metric";
+
+  const labelEl = document.createElement("span");
+  labelEl.className = "batch-metric-label";
+  labelEl.textContent = label;
+
+  const valueEl = document.createElement("span");
+  valueEl.className = "batch-metric-value";
+  valueEl.textContent = value;
+
+  card.appendChild(labelEl);
+  card.appendChild(valueEl);
+  return card;
+}
+
+function renderBatchAssignments(assignments) {
+  const section = document.createElement("section");
+  section.className = "batch-section";
+
+  const title = document.createElement("h4");
+  title.className = "batch-section-title";
+  title.textContent = "Patient outcomes";
+  section.appendChild(title);
+
+  const list = document.createElement("div");
+  list.className = "batch-list";
+
+  (assignments || []).forEach((assignment) => {
+    const card = document.createElement("article");
+    card.className = "batch-card";
+
+    const header = document.createElement("div");
+    header.className = "batch-card-header";
+
+    const heading = document.createElement("h5");
+    heading.className = "batch-card-title";
+    heading.textContent = `${assignment.input_position}. ${assignment.patient_id}`;
+
+    const badge = document.createElement("span");
+    badge.className = `batch-badge ${assignment.booking ? "booked" : "failed"}`;
+    badge.textContent = assignment.booking ? "Booked" : titleCase(assignment.status);
+
+    header.appendChild(heading);
+    header.appendChild(badge);
+    card.appendChild(header);
+
+    const meta = document.createElement("div");
+    meta.className = "batch-card-meta";
+
+    if (assignment.booking) {
+      meta.innerHTML = `
+        <span>Round ${assignment.assigned_round} | ${titleCase(assignment.booking.modality)} | ${prettifyService(assignment.booking.service_type)}</span>
+        <span>${formatDateTime(assignment.booking.start_time, { weekday: "short", year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+        <span>Initial feasible: ${assignment.initial_feasible_count} | Last-round feasible: ${assignment.feasible_count_last_round}</span>
+      `;
+    } else {
+      const blockers = assignment.blocker_summary?.ranked_reasons?.join(", ") || "none";
+      meta.innerHTML = `
+        <span>No slot won in auction</span>
+        <span>Initial feasible: ${assignment.initial_feasible_count} | Last-round feasible: ${assignment.feasible_count_last_round}</span>
+        <span>Blockers: ${blockers}</span>
+      `;
+    }
+
+    card.appendChild(meta);
+    list.appendChild(card);
+  });
+
+  section.appendChild(list);
+  return section;
+}
+
+function renderBatchRounds(rounds) {
+  const section = document.createElement("section");
+  section.className = "batch-section";
+
+  const title = document.createElement("h4");
+  title.className = "batch-section-title";
+  title.textContent = "Auction rounds";
+  section.appendChild(title);
+
+  const list = document.createElement("div");
+  list.className = "batch-list";
+
+  (rounds || []).forEach((round) => {
+    const card = document.createElement("article");
+    card.className = "batch-card";
+
+    const header = document.createElement("div");
+    header.className = "batch-card-header";
+
+    const heading = document.createElement("h5");
+    heading.className = "batch-card-title";
+    heading.textContent = `Round ${round.round_number}`;
+    header.appendChild(heading);
+
+    const summary = document.createElement("span");
+    summary.className = "batch-badge booked";
+    summary.textContent = `${round.assigned_patient_ids?.length || 0} assigned`;
+    header.appendChild(summary);
+    card.appendChild(header);
+
+    const meta = document.createElement("div");
+    meta.className = "batch-card-meta";
+    meta.innerHTML = `
+      <span>Assigned: ${round.assigned_patient_ids?.join(", ") || "none"}</span>
+      <span>Exhausted: ${round.exhausted_patient_ids?.join(", ") || "none"}</span>
+    `;
+    card.appendChild(meta);
+
+    const bidsWrap = document.createElement("div");
+    bidsWrap.className = "batch-round-bids";
+    const winningSlots = new Set(round.assigned_slot_ids || []);
+
+    (round.bids || []).forEach((bid) => {
+      const bidRow = document.createElement("div");
+      bidRow.className = "batch-bid-row";
+      if (winningSlots.has(bid.slot_id)) {
+        bidRow.classList.add("winner");
+      }
+
+      const main = document.createElement("div");
+      main.className = "batch-bid-main";
+
+      const bidTitle = document.createElement("span");
+      bidTitle.className = "batch-bid-title";
+      bidTitle.textContent = `${bid.patient_id} -> ${bid.slot_id}`;
+
+      const bidMeta = document.createElement("span");
+      bidMeta.className = "batch-bid-meta";
+      bidMeta.textContent = `Feasible choices: ${bid.feasible_count} | Input order: ${bid.input_position}`;
+
+      main.appendChild(bidTitle);
+      main.appendChild(bidMeta);
+
+      const score = document.createElement("span");
+      score.className = "batch-bid-score";
+      score.textContent = `Score ${bid.utility}`;
+
+      bidRow.appendChild(main);
+      bidRow.appendChild(score);
+      bidsWrap.appendChild(bidRow);
+    });
+
+    card.appendChild(bidsWrap);
+    list.appendChild(card);
+  });
+
+  section.appendChild(list);
+  return section;
+}
+
+function renderBatchResult(batchResponse) {
+  if (!adminBatchResult) {
+    return;
+  }
+
+  adminBatchResult.innerHTML = "";
+
+  if (!batchResponse) {
+    adminBatchResult.className = "batch-result-empty";
+    adminBatchResult.textContent = "No batch run yet.";
+    return;
+  }
+
+  adminBatchResult.className = "batch-result-panel";
+
+  const metrics = document.createElement("div");
+  metrics.className = "batch-result-grid";
+  metrics.appendChild(createBatchMetric("Strategy", titleCase(batchResponse.strategy || "auction")));
+  metrics.appendChild(createBatchMetric("Conflict rule", titleCase(batchResponse.conflict_policy)));
+  metrics.appendChild(createBatchMetric("Rounds", String(batchResponse.rounds_run)));
+  metrics.appendChild(createBatchMetric("Booked", `${batchResponse.booked_patients}/${batchResponse.total_patients}`));
+  adminBatchResult.appendChild(metrics);
+
+  adminBatchResult.appendChild(renderBatchAssignments(batchResponse.assignments));
+  adminBatchResult.appendChild(renderBatchRounds(batchResponse.rounds));
+}
+
+async function runBatchBooking() {
+  const patients = collectBatchPatients();
+  if (!patients.length) {
+    throw new Error("Add at least one batch patient before running shared booking.");
+  }
+
+  const batchResponse = await postJson("/api/schedule/multi", {
+    conflict_policy: batchConflictPolicySelect?.value || "scarcity_first",
+    patients,
+  });
+
+  state.admin.batchResult = batchResponse;
+  updateAdminView();
+  await loadRotaTimetable();
+  addMessage(
+    "assistant",
+    "Assistant",
+    `Batch auction complete. ${batchResponse.booked_patients} of ${batchResponse.total_patients} patients were booked using ${titleCase(batchResponse.conflict_policy)} conflict resolution.`
+  );
+}
+
 function updateAdminView() {
   stateSummary.textContent = JSON.stringify(
     {
@@ -891,6 +1331,7 @@ function updateAdminView() {
       has_intake: Boolean(state.intakeSummary),
       has_route: Boolean(state.routingDecision),
       has_preferences: Boolean(state.preferences),
+      has_batch_result: Boolean(state.admin.batchResult),
     },
     null,
     2
@@ -914,6 +1355,7 @@ function updateAdminView() {
   adminRelaxTrail.textContent = state.admin.relaxTrail.length
     ? JSON.stringify(state.admin.relaxTrail, null, 2)
     : "No relaxations yet.";
+  renderBatchResult(state.admin.batchResult);
 
   renderAdminTranscript();
 }
@@ -927,6 +1369,7 @@ function formatRotaTimetable(payload) {
   lines.push(`Hospital: ${payload.hospital}`);
   lines.push(`DB Horizon: ${payload.database_horizon_days} days`);
   lines.push(`Database Builds: ${payload.database_build_count}`);
+  lines.push(`Mode: ${payload.stochastic_mode ? "Dynamic/stochastic" : "Stable/deterministic"}`);
 
   const serviceKeys = Object.keys(payload.services).sort();
   serviceKeys.forEach((service) => {
@@ -1187,6 +1630,7 @@ async function runSchedulingRound(currentPreferences) {
 
   if (offerResponse.status === "booked" && offerResponse.booking) {
     state.preferences = currentPreferences;
+    await loadRotaTimetable();
     if (isFriendlyMode()) {
       addMessage("assistant", "Assistant", formatBooking(offerResponse.booking));
     } else {
@@ -1196,6 +1640,7 @@ async function runSchedulingRound(currentPreferences) {
   }
 
   if (offerResponse.status === "failed") {
+    await loadRotaTimetable();
     if (isFriendlyMode()) {
       addMessage("assistant", "Assistant", offerResponse.message || "No suitable appointment found.");
     } else {
@@ -1295,11 +1740,27 @@ async function loadRotaTimetable() {
   try {
     const timetable = await getJson("/api/slots?horizon_days=14");
     state.admin.rotaTimetable = timetable;
+    updateRotaModeControls(timetable);
     updateAdminView();
   } catch (error) {
     state.admin.rotaTimetable = null;
     adminRotaTimetable.textContent = `Failed to load timetable: ${error.message}`;
   }
+}
+
+async function setRotaMode(enabled) {
+  const response = await postJson("/api/rota/mode", {
+    stochastic_mode: Boolean(enabled),
+  });
+  updateRotaModeControls(response);
+  await loadRotaTimetable();
+  addMessage(
+    "assistant",
+    "Assistant",
+    response.stochastic_mode
+      ? "Dynamic rota mode enabled. The shared slot inventory will regenerate after each completed run."
+      : "Stable rota mode enabled. The shared slot inventory will stay fixed between runs."
+  );
 }
 
 function resetFormInputs() {
@@ -1346,6 +1807,7 @@ function resetRunState() {
   state.admin.relaxTrail = [];
   state.admin.latestSlotScores = [];
   state.admin.rotaTimetable = savedRotaTimetable;
+  state.admin.batchResult = null;
 
   humanModeToggle.checked = false;
   setCaptureMode("conversation", { resetConversationBase: false });
@@ -1406,12 +1868,53 @@ if (humanModeToggle) {
   });
 }
 
+if (rotaStochasticModeToggle) {
+  rotaStochasticModeToggle.addEventListener("change", async () => {
+    try {
+      await setRotaMode(rotaStochasticModeToggle.checked);
+    } catch (error) {
+      addMessage("system", "System", error.message);
+      await loadRotaTimetable();
+    }
+  });
+}
+
 if (formHorizonInput) {
   formHorizonInput.addEventListener("input", updateFormSliderLabels);
 }
 
 if (formSoonestWeightInput) {
   formSoonestWeightInput.addEventListener("input", updateFormSliderLabels);
+}
+
+if (addBatchPatientButton) {
+  addBatchPatientButton.addEventListener("click", () => {
+    createBatchPatientRow();
+  });
+}
+
+if (loadBatchExampleButton) {
+  loadBatchExampleButton.addEventListener("click", () => {
+    loadBatchDemoRows();
+    state.admin.batchResult = null;
+    updateAdminView();
+  });
+}
+
+if (runBatchButton) {
+  runBatchButton.addEventListener("click", async () => {
+    const originalLabel = runBatchButton.textContent;
+    runBatchButton.disabled = true;
+    runBatchButton.textContent = "Running...";
+    try {
+      await runBatchBooking();
+    } catch (error) {
+      addMessage("system", "System", error.message);
+    } finally {
+      runBatchButton.disabled = false;
+      runBatchButton.textContent = originalLabel;
+    }
+  });
 }
 
 intakeButton.addEventListener("click", async () => {
@@ -1434,3 +1937,4 @@ updateAdminView();
 updateUserExperience();
 seedWelcomeMessage();
 loadRotaTimetable();
+loadBatchDemoRows();

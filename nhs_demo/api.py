@@ -14,6 +14,10 @@ from nhs_demo.schemas import (
     IntakeRequest,
     IntakeRefineRequest,
     IntakeResponse,
+    MultiScheduleRequest,
+    MultiScheduleResponse,
+    RotaModeRequest,
+    RotaModeResponse,
     RouteRequest,
     RouteResponse,
     ScheduleOfferRequest,
@@ -106,6 +110,13 @@ def create_app() -> FastAPI:
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.post("/api/schedule/multi", response_model=MultiScheduleResponse)
+    def schedule_multi(payload: MultiScheduleRequest) -> MultiScheduleResponse:
+        try:
+            return orchestrator.schedule_many(payload)
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.post("/api/schedule/preview", response_model=ScheduleOfferResponse)
     def schedule_preview(payload: ScheduleOfferRequest) -> ScheduleOfferResponse:
         try:
@@ -139,6 +150,14 @@ def create_app() -> FastAPI:
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/rota/mode", response_model=RotaModeResponse)
+    def get_rota_mode() -> RotaModeResponse:
+        return orchestrator.rota_mode()
+
+    @app.post("/api/rota/mode", response_model=RotaModeResponse)
+    def set_rota_mode(payload: RotaModeRequest) -> RotaModeResponse:
+        return orchestrator.set_rota_mode(payload.stochastic_mode)
 
     @app.get("/health")
     def health() -> dict:

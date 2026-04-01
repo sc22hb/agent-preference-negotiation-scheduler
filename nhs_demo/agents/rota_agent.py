@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import random
 from typing import Callable, Dict, List, Tuple
 
 from nhs_demo.config import SLOT_DATABASE_HORIZON_DAYS
@@ -35,11 +36,16 @@ class RotaAgent:
         self.database_horizon_days = max(1, database_horizon_days)
         self._database_build_count = 0
         self._database_anchor_date = self.base_datetime.date()
+        self._stochastic_mode = False
         self._slot_database = self._build_slot_database()
 
     @property
     def database_build_count(self) -> int:
         return self._database_build_count
+
+    @property
+    def stochastic_mode(self) -> bool:
+        return self._stochastic_mode
 
     def list_inventory(
         self,
@@ -133,13 +139,27 @@ class RotaAgent:
 
         return slots
 
+    def set_stochastic_mode(self, enabled: bool) -> None:
+        enabled = bool(enabled)
+        if self._stochastic_mode == enabled:
+            return
+        self._refresh_slot_database_if_needed()
+        self._stochastic_mode = enabled
+        self._slot_database = self._build_slot_database()
+
+    def rotate_inventory(self) -> None:
+        self._refresh_slot_database_if_needed()
+        if not self._stochastic_mode:
+            return
+        self._slot_database = self._build_slot_database()
+
     def _build_slot_database(self) -> Dict[str, List[_SlotTemplate]]:
         self._database_build_count += 1
         database: Dict[str, List[_SlotTemplate]] = {}
         service_order = ["GP", "Nurse", "Pharmacist", "Admin"]
+        rng = self._inventory_rng() if self._stochastic_mode else None
 
         for service_type in service_order:
-            templates = self._templates_for_service(service_type)
             service_slots: List[_SlotTemplate] = []
             service_prefix = self._service_prefix(service_type)
 
@@ -148,6 +168,7 @@ class RotaAgent:
                 if day_start.weekday() >= 5:
                     continue
 
+                templates = self._daily_templates_for_service(service_type, rng)
                 for idx, (hour, minute, modality, clinician_suffix) in enumerate(templates, start=1):
                     slot_start = day_start.replace(hour=hour, minute=minute)
                     slot_id = (
@@ -184,6 +205,10 @@ class RotaAgent:
         current = self._now()
         return current.replace(hour=0, minute=0, second=0, microsecond=0)
 
+    def _inventory_rng(self) -> random.Random:
+        seed = f"{self._database_anchor_date.isoformat()}-{self._database_build_count}"
+        return random.Random(seed)
+
     def _now(self) -> datetime:
         current = self._now_provider()
         return current.replace(tzinfo=None)
@@ -197,6 +222,20 @@ class RotaAgent:
         if service_type == "Admin":
             return 10
         return 15
+
+    def _daily_templates_for_service(
+        self,
+        service_type: str,
+        rng: random.Random | None,
+    ) -> List[Tuple[int, int, str, str]]:
+        templates = self._templates_for_service(service_type)
+        if rng is None:
+            return templates
+
+        template_pool = self._template_pool_for_service(service_type)
+        sample_size = min(len(templates), len(template_pool))
+        sampled_templates = rng.sample(template_pool, k=sample_size)
+        return sorted(sampled_templates, key=lambda item: (item[0], item[1], item[3], item[2]))
 
     def _templates_for_service(self, service_type: str) -> List[Tuple[int, int, str, str]]:
         if service_type == "GP":
@@ -222,6 +261,47 @@ class RotaAgent:
             ]
         return [
             (10, 0, "phone", "ADM1"),
+            (14, 30, "video", "ADM1"),
+            (16, 0, "phone", "ADM2"),
+        ]
+
+    def _template_pool_for_service(self, service_type: str) -> List[Tuple[int, int, str, str]]:
+        if service_type == "GP":
+            return [
+                (8, 30, "phone", "A"),
+                (9, 0, "in_person", "A"),
+                (9, 45, "video", "B"),
+                (10, 30, "phone", "A"),
+                (11, 30, "video", "B"),
+                (13, 0, "phone", "C"),
+                (14, 0, "in_person", "B"),
+                (15, 0, "video", "C"),
+                (16, 0, "phone", "C"),
+            ]
+        if service_type == "Nurse":
+            return [
+                (8, 45, "in_person", "N1"),
+                (9, 30, "in_person", "N1"),
+                (10, 30, "phone", "N2"),
+                (11, 0, "in_person", "N2"),
+                (13, 30, "phone", "N1"),
+                (15, 0, "in_person", "N3"),
+                (16, 0, "phone", "N3"),
+            ]
+        if service_type == "Pharmacist":
+            return [
+                (9, 0, "phone", "P1"),
+                (9, 30, "phone", "P1"),
+                (11, 30, "in_person", "P1"),
+                (12, 0, "in_person", "P1"),
+                (14, 30, "phone", "P2"),
+                (15, 30, "phone", "P2"),
+            ]
+        return [
+            (9, 30, "phone", "ADM1"),
+            (10, 0, "phone", "ADM1"),
+            (11, 30, "video", "ADM1"),
+            (14, 0, "phone", "ADM2"),
             (14, 30, "video", "ADM1"),
             (16, 0, "phone", "ADM2"),
         ]

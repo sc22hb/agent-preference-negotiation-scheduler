@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
@@ -58,6 +58,7 @@ class PatientPreferences(BaseModel):
     preferred_day_periods: List[DayPeriodPreference] = Field(default_factory=list)
     excluded_day_periods: List[DayPeriodPreference] = Field(default_factory=list)
     date_horizon_days: int = Field(default=10, ge=1, le=30)
+    earliest_start_date: Optional[date] = None
     soonest_weight: int = Field(default=60, ge=0, le=100)
     weight_profile: PreferenceWeightProfile = Field(default_factory=PreferenceWeightProfile)
     flexibility: FlexibilityOptions = Field(default_factory=FlexibilityOptions)

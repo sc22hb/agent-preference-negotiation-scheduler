@@ -136,6 +136,9 @@ class MasterAllocatorAgent:
             reasons.append("excluded_modality")
 
         day = self.DAY_ORDER[slot.start_time.weekday()]
+        if preferences.earliest_start_date and slot.start_time.date() < preferences.earliest_start_date:
+            reasons.append("before_earliest_date")
+
         if day in preferences.excluded_days:
             reasons.append("excluded_day")
 

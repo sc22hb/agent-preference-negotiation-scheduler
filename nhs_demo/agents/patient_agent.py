@@ -13,6 +13,7 @@ from nhs_demo.schemas import (
     BlockerSummary,
     PatientPreferences,
     RelaxationQuestion,
+    RoutingDecision,
     Slot,
 )
 
@@ -76,6 +77,7 @@ class PatientAgent:
 
     def propose_relaxations(
         self,
+        routing: RoutingDecision,
         blocker_summary: BlockerSummary,
         preferences: PatientPreferences,
         applied_relaxations: Iterable[str],
@@ -87,7 +89,7 @@ class PatientAgent:
         for key in RELAXATION_ORDER:
             if key in applied:
                 continue
-            question = self._relaxation_question_if_applicable(key, blockers, preferences)
+            question = self._relaxation_question_if_applicable(key, routing, blockers, preferences)
             if question:
                 relaxations.append(question)
             if len(relaxations) == 2:
@@ -211,6 +213,7 @@ class PatientAgent:
     def _relaxation_question_if_applicable(
         self,
         key: str,
+        routing: RoutingDecision,
         blockers: Dict[str, int],
         preferences: PatientPreferences,
     ) -> RelaxationQuestion | None:
@@ -237,6 +240,8 @@ class PatientAgent:
             return None
 
         if key == "relax_excluded_modalities":
+            if len(routing.allowed_modalities) == 1 and routing.allowed_modalities[0] == "in_person":
+                return None
             if blockers.get("excluded_modality", 0) and preferences.excluded_modalities and preferences.flexibility.allow_modality_relax:
                 return RelaxationQuestion(
                     key=key,

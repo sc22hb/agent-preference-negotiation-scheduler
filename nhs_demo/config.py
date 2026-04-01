@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 from typing import Dict
 
@@ -13,9 +12,6 @@ DEFAULT_DATE_HORIZON_DAYS = 10
 DATE_RANGE_EXTENSION_DAYS = 3
 MAX_PREFERENCE_HORIZON_DAYS = 30
 SLOT_DATABASE_HORIZON_DAYS = MAX_PREFERENCE_HORIZON_DAYS + DATE_RANGE_EXTENSION_DAYS
-
-# Fixed synthetic base keeps tests and demos deterministic.
-SYNTHETIC_BASE_DATETIME = datetime(2026, 2, 9, 8, 0)
 
 UTILITY_WEIGHTS: Dict[str, int] = {
     "preferred_modality": 30,
@@ -34,6 +30,7 @@ MISMATCH_PENALTIES: Dict[str, float] = {
 
 BLOCKER_SEVERITY: Dict[str, int] = {
     "modality_not_allowed": 5,
+    "before_earliest_date": 5,
     "excluded_day_period": 5,
     "excluded_modality": 4,
     "excluded_day": 3,

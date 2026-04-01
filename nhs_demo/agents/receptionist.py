@@ -5,7 +5,8 @@ import os
 import re
 import urllib.error
 import urllib.request
-from typing import Any, Dict, List, Tuple
+from datetime import date, datetime, timedelta
+from typing import Any, Callable, Dict, List, Tuple
 
 from nhs_demo.config import DEFAULT_DATE_HORIZON_DAYS
 from nhs_demo.schemas import (
@@ -43,10 +44,44 @@ class ReceptionistAgent:
     DAY_ORDER: List[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
     PERIOD_PATTERNS: Dict[str, str] = {
-        "morning": r"\bmorning\b|\bearly\b",
-        "afternoon": r"\bafternoon\b|\bmidday\b",
-        "evening": r"\bevening\b|\blate\b",
+        "morning": r"\bmornings?\b|\bearly\b",
+        "afternoon": r"\bafternoons?\b|\bmidday\b",
+        "evening": r"\bevenings?\b|\blate\b",
     }
+
+    AVAILABILITY_NEGATIVE_CUES = (
+        re.compile(r"\bno\b"),
+        re.compile(r"\bnot\b"),
+        re.compile(r"\bavoid\b"),
+        re.compile(r"\bcannot\b"),
+        re.compile(r"\bcant\b"),
+        re.compile(r"\bbusy\b"),
+        re.compile(r"\bbooked\b"),
+        re.compile(r"\boccupied\b"),
+        re.compile(r"\bworking\b"),
+        re.compile(r"\bat work\b"),
+        re.compile(r"\bon shift\b"),
+        re.compile(r"\bnot free\b"),
+        re.compile(r"\bnot available\b"),
+        re.compile(r"\bunavailable\b"),
+        re.compile(r"\bdo not work\b"),
+        re.compile(r"\bdoes not work\b"),
+        re.compile(r"\bi\s+work(?:ing)?\b"),
+        re.compile(r"\bi\s+am\s+working\b"),
+        re.compile(r"\bwill not work\b"),
+    )
+    AVAILABILITY_POSITIVE_CUES = (
+        re.compile(r"\bprefer(?:red)?\b"),
+        re.compile(r"\bideally\b"),
+        re.compile(r"\bavailable\b"),
+        re.compile(r"\bbest\b"),
+        re.compile(r"\bcan do\b"),
+        re.compile(r"\bfits\b"),
+        re.compile(r"\bworks? for me\b"),
+        re.compile(r"\bworks? well\b"),
+        re.compile(r"\bokay\b"),
+        re.compile(r"\bok\b"),
+    )
 
     FORM_REASON_TEXT: Dict[str, str] = {
         "repeat_prescription": "repeat prescription",
@@ -166,7 +201,8 @@ class ReceptionistAgent:
         "preferred_modality": "Do you prefer an in-person, phone, or video consultation?",
     }
 
-    def __init__(self) -> None:
+    def __init__(self, now_provider: Callable[[], datetime] | None = None) -> None:
+        self._now_provider = now_provider or datetime.now
         self._last_llm_error: str | None = None
 
     def build_intake(
@@ -382,6 +418,7 @@ class ReceptionistAgent:
                 rule_preferences=rule_preferences,
                 preference_hint=preference_hint,
             )
+            preferences = self._apply_time_boundary_policy(preferences, text)
             preferences = self._apply_service_modality_policy(
                 preferences,
                 complaint_category=complaint_category,
@@ -402,6 +439,11 @@ class ReceptionistAgent:
             merged_missing_fields = self._merge_unique_fields(
                 llm_missing_fields,
                 inferred_missing_fields,
+            )
+            merged_missing_fields = self._remove_context_specific_missing_fields(
+                merged_missing_fields,
+                complaint_category=complaint_category,
+                raw_text=text,
             )
             answered_question_ids = self._answered_clarification_ids(clarification_answers)
             questions = [
@@ -1080,6 +1122,7 @@ class ReceptionistAgent:
         complaint_category = self._extract_category(merged_text)
         duration_text = self._extract_duration(merged_text)
         preferences = self._extract_preferences(merged_text)
+        preferences = self._apply_time_boundary_policy(preferences, merged_text)
         preferences = self._apply_service_modality_policy(
             preferences,
             complaint_category=complaint_category,
@@ -1097,6 +1140,11 @@ class ReceptionistAgent:
             clarification_answers,
         ):
             missing_fields = self._merge_unique_fields(["complaint_context"], missing_fields)
+        missing_fields = self._remove_context_specific_missing_fields(
+            missing_fields,
+            complaint_category=complaint_category,
+            raw_text=merged_text,
+        )
         answered_question_ids = self._answered_clarification_ids(clarification_answers)
         questions = self._clarification_questions_from_missing(
             missing_fields,
@@ -1142,6 +1190,26 @@ class ReceptionistAgent:
 
         return missing_fields
 
+    def _apply_time_boundary_policy(self, preferences: PatientPreferences, text: str) -> PatientPreferences:
+        earliest_start_date = self._extract_earliest_start_date(text)
+        if earliest_start_date is None:
+            return preferences
+        return preferences.model_copy(update={"earliest_start_date": earliest_start_date})
+
+    def _now(self) -> datetime:
+        current = self._now_provider()
+        return current.replace(tzinfo=None)
+
+    def _remove_context_specific_missing_fields(
+        self,
+        missing_fields: List[str],
+        complaint_category: str | None,
+        raw_text: str,
+    ) -> List[str]:
+        if not self._is_in_person_only_context(complaint_category, raw_text):
+            return missing_fields
+        return [field for field in missing_fields if field != "modality"]
+
     def _apply_service_modality_policy(
         self,
         preferences: PatientPreferences,
@@ -1174,6 +1242,24 @@ class ReceptionistAgent:
         questions: List[ClarificationQuestion] = []
 
         for field in missing_fields:
+            if field == "availability":
+                preferred_question = ClarificationQuestion(
+                    question_id="availability",
+                    prompt="Which days or times would you prefer?",
+                )
+                excluded_question = ClarificationQuestion(
+                    question_id="availability_exclusion",
+                    prompt="Which days or times cannot you do?",
+                )
+                for question in (preferred_question, excluded_question):
+                    if question.question_id in answered or question.question_id in existing:
+                        continue
+                    questions.append(question)
+                    if len(questions) == 2:
+                        break
+                if len(questions) == 2:
+                    break
+                continue
             question = self._question_for_missing_field(field)
             if question is None:
                 continue
@@ -1199,7 +1285,12 @@ class ReceptionistAgent:
         if field == "availability":
             return ClarificationQuestion(
                 question_id=self.QUESTION_ID_BY_FIELD[field],
-                prompt="What days or times work best, and are there any you cannot do?",
+                prompt="Which days or times would you prefer?",
+            )
+        if field == "availability_exclusion":
+            return ClarificationQuestion(
+                question_id=self.QUESTION_ID_BY_FIELD[field],
+                prompt="Which days or times cannot you do?",
             )
         if field == "duration":
             return ClarificationQuestion(
@@ -1413,6 +1504,41 @@ class ReceptionistAgent:
             return 7
         return None
 
+    def _extract_earliest_start_date(self, text: str) -> date | None:
+        lowered = self._normalize_text_for_parsing(text.lower())
+        if "next week" not in lowered and "this week" not in lowered:
+            return None
+
+        today = self._now().date()
+
+        next_week_day = self._extract_weekday_after_phrase(lowered, "next week")
+        if next_week_day:
+            next_week_start = today + timedelta(days=(7 - today.weekday()) % 7 or 7)
+            return next_week_start + timedelta(days=self.DAY_ORDER.index(next_week_day))
+
+        if "next week" in lowered:
+            return today + timedelta(days=(7 - today.weekday()) % 7 or 7)
+
+        this_week_day = self._extract_weekday_after_phrase(lowered, "this week")
+        if this_week_day:
+            this_week_start = today - timedelta(days=today.weekday())
+            candidate = this_week_start + timedelta(days=self.DAY_ORDER.index(this_week_day))
+            if candidate >= today:
+                return candidate
+            return today
+
+        return today
+
+    def _extract_weekday_after_phrase(self, lowered: str, phrase: str) -> str | None:
+        match = re.search(rf"\b{re.escape(phrase)}\b(.{{0,32}})", lowered)
+        if not match:
+            return None
+        window = match.group(1)
+        for day, pattern in self.DAY_PATTERNS.items():
+            if re.search(pattern, window):
+                return day
+        return None
+
     def _looks_like_horizon_phrase(self, normalized_text: str) -> bool:
         horizon_markers = [
             "within the next",
@@ -1429,11 +1555,27 @@ class ReceptionistAgent:
         return any(marker in normalized_text for marker in horizon_markers)
 
     def _extract_constraints_text(self, text: str) -> List[str]:
-        lowered = text.lower()
+        lowered = self._normalize_text_for_parsing(text.lower())
         snippets: List[str] = []
-        for marker in ["no ", "not ", "avoid ", "cannot ", "can't ", "unavailable"]:
+        markers = [
+            "no",
+            "not",
+            "avoid",
+            "cannot",
+            "unavailable",
+            "busy",
+            "booked",
+            "occupied",
+            "working",
+            "not available",
+            "not free",
+            "do not work",
+            "does not work",
+            "will not work",
+        ]
+        for marker in markers:
             if marker in lowered:
-                snippets.append(marker.strip())
+                snippets.append(marker)
         return sorted(set(snippets))
 
     def _extract_preferences(self, text: str) -> PatientPreferences:
@@ -1448,7 +1590,7 @@ class ReceptionistAgent:
         preferred_day_periods, excluded_day_periods = self._collect_day_period_preferences(lowered)
         weight_profile = self._apply_text_weight_cues(PreferenceWeightProfile(), lowered)
 
-        return PatientPreferences(
+        preferences = PatientPreferences(
             preferred_modalities=preferred_modalities,
             excluded_modalities=excluded_modalities,
             preferred_days=preferred_days,
@@ -1461,11 +1603,18 @@ class ReceptionistAgent:
             soonest_weight=60,
             weight_profile=weight_profile,
         )
+        return self._apply_time_boundary_policy(preferences, text)
 
     def _normalize_text_for_parsing(self, lowered: str) -> str:
         lowered = lowered.replace("can’t", "cannot")
         lowered = lowered.replace("can't", "cannot")
         lowered = lowered.replace("cant", "cannot")
+        lowered = lowered.replace("don’t", "do not")
+        lowered = lowered.replace("don't", "do not")
+        lowered = lowered.replace("doesn’t", "does not")
+        lowered = lowered.replace("doesn't", "does not")
+        lowered = lowered.replace("didn’t", "did not")
+        lowered = lowered.replace("didn't", "did not")
         lowered = lowered.replace("won't", "will not")
         lowered = lowered.replace("wont", "will not")
         return re.sub(r"\s+", " ", lowered).strip()
@@ -1491,54 +1640,6 @@ class ReceptionistAgent:
             else:
                 preferred_modalities.append(modality)
 
-    def _collect_days(self, lowered: str) -> Tuple[List[str], List[str]]:
-        preferred_days: set[str] = set()
-        excluded_days: set[str] = set()
-
-        for day, pattern in self.DAY_PATTERNS.items():
-            for match in re.finditer(pattern, lowered):
-                context_start = max(
-                    lowered.rfind(".", 0, match.start()),
-                    lowered.rfind(",", 0, match.start()),
-                    lowered.rfind(";", 0, match.start()),
-                    lowered.rfind("\n", 0, match.start()),
-                )
-                context = lowered[context_start + 1 : match.start()]
-
-                neg_idx = self._last_cue_index(
-                    context,
-                    [r"\bno\b", r"\bnot\b", r"\bavoid\b", r"\bcannot\b", r"\bunavailable\b"],
-                )
-                pos_idx = self._last_cue_index(
-                    context,
-                    [
-                        r"\bprefer(?:red)?\b",
-                        r"\bideally\b",
-                        r"\bcan do\b",
-                        r"\bworks?\b",
-                        r"\bavailable\b",
-                        r"\bbest\b",
-                    ],
-                )
-
-                if neg_idx >= 0 and neg_idx >= pos_idx:
-                    window = lowered[max(0, match.start() - 20) : min(len(lowered), match.end() + 30)]
-                    period_in_window = any(
-                        re.search(period_pattern, window) is not None
-                        for period_pattern in self.PERIOD_PATTERNS.values()
-                    )
-                    is_all_day = "all day" in window
-                    if period_in_window and not is_all_day:
-                        continue
-                    excluded_days.add(day)
-                else:
-                    preferred_days.add(day)
-
-        preferred_days.difference_update(excluded_days)
-        ordered_preferred = [day for day in self.DAY_ORDER if day in preferred_days]
-        ordered_excluded = [day for day in self.DAY_ORDER if day in excluded_days]
-        return ordered_preferred, ordered_excluded
-
     def _collect_day_period_preferences(
         self,
         lowered: str,
@@ -1546,42 +1647,96 @@ class ReceptionistAgent:
         preferred: List[DayPeriodPreference] = []
         excluded: List[DayPeriodPreference] = []
         clauses = re.split(r"[,;.\n]|\bbut\b", lowered)
-        negation_pattern = re.compile(r"\b(no|not|avoid|cannot|unavailable)\b")
 
         for clause in clauses:
             clause = clause.strip()
             if not clause or "all day" in clause:
                 continue
 
-            days = [day for day, pattern in self.DAY_PATTERNS.items() if re.search(pattern, clause)]
-            periods = [period for period, pattern in self.PERIOD_PATTERNS.items() if re.search(pattern, clause)]
-            if not days or not periods:
-                continue
+            for day, day_pattern in self.DAY_PATTERNS.items():
+                for day_match in re.finditer(day_pattern, clause):
+                    local_window = clause[max(0, day_match.start() - 10) : min(len(clause), day_match.end() + 18)]
+                    periods = [
+                        period
+                        for period, period_pattern in self.PERIOD_PATTERNS.items()
+                        if re.search(period_pattern, local_window)
+                    ]
+                    if not periods:
+                        continue
 
-            target = excluded if negation_pattern.search(clause) else preferred
-            for day in days:
-                for period in periods:
-                    target.append(DayPeriodPreference(day=day, period=period))
+                    has_negative_cue = self._has_any_cue(local_window, self.AVAILABILITY_NEGATIVE_CUES)
+                    has_positive_cue = self._has_any_cue(local_window, self.AVAILABILITY_POSITIVE_CUES)
+                    if has_negative_cue and "all day" not in local_window:
+                        for period in periods:
+                            excluded.append(DayPeriodPreference(day=day, period=period))
+                        continue
+
+                    if has_positive_cue or not has_negative_cue:
+                        for period in periods:
+                            preferred.append(DayPeriodPreference(day=day, period=period))
 
         return self._dedupe_day_period_pairs(preferred), self._dedupe_day_period_pairs(excluded)
 
     def _collect_periods(self, lowered: str) -> Tuple[List[str], List[str]]:
         preferred_periods: List[str] = []
         excluded_periods: List[str] = []
-        for period, pattern in self.PERIOD_PATTERNS.items():
-            if re.search(pattern, lowered) is None:
+        clauses = re.split(r"[,;.\n]|\bbut\b", lowered)
+
+        for clause in clauses:
+            clause = clause.strip()
+            if not clause:
                 continue
-            negated = re.search(rf"\b(no|not|avoid|cannot|unavailable)\s+(?:{pattern})", lowered)
-            if negated:
-                excluded_periods.append(period)
-            else:
-                preferred_periods.append(period)
+
+            has_negative_cue = self._has_any_cue(clause, self.AVAILABILITY_NEGATIVE_CUES)
+            has_positive_cue = self._has_any_cue(clause, self.AVAILABILITY_POSITIVE_CUES)
+
+            for period, pattern in self.PERIOD_PATTERNS.items():
+                if re.search(pattern, clause) is None:
+                    continue
+                if has_negative_cue and "all day" not in clause:
+                    excluded_periods.append(period)
+                elif has_positive_cue or not has_negative_cue:
+                    preferred_periods.append(period)
+
         return preferred_periods, excluded_periods
 
-    def _last_cue_index(self, text: str, patterns: List[str]) -> int:
-        last_idx = -1
-        for pattern in patterns:
-            for match in re.finditer(pattern, text):
-                if match.start() > last_idx:
-                    last_idx = match.start()
-        return last_idx
+    def _collect_days(self, lowered: str) -> Tuple[List[str], List[str]]:
+        preferred_days: set[str] = set()
+        excluded_days: set[str] = set()
+        clauses = re.split(r"[,;.\n]|\bbut\b", lowered)
+
+        for clause in clauses:
+            clause = clause.strip()
+            if not clause:
+                continue
+
+            days_in_clause = [
+                day
+                for day, pattern in self.DAY_PATTERNS.items()
+                if re.search(pattern, clause)
+            ]
+            if not days_in_clause:
+                continue
+
+            has_negative_cue = self._has_any_cue(clause, self.AVAILABILITY_NEGATIVE_CUES)
+            has_positive_cue = self._has_any_cue(clause, self.AVAILABILITY_POSITIVE_CUES)
+            period_in_clause = any(
+                re.search(pattern, clause) is not None for pattern in self.PERIOD_PATTERNS.values()
+            )
+
+            if has_negative_cue:
+                if period_in_clause and "all day" not in clause:
+                    continue
+                excluded_days.update(days_in_clause)
+                continue
+
+            if has_positive_cue or not has_negative_cue:
+                preferred_days.update(days_in_clause)
+
+        preferred_days.difference_update(excluded_days)
+        ordered_preferred = [day for day in self.DAY_ORDER if day in preferred_days]
+        ordered_excluded = [day for day in self.DAY_ORDER if day in excluded_days]
+        return ordered_preferred, ordered_excluded
+
+    def _has_any_cue(self, text: str, patterns: Tuple[re.Pattern[str], ...]) -> bool:
+        return any(pattern.search(text) for pattern in patterns)

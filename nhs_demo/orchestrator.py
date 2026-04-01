@@ -299,6 +299,7 @@ class DemoOrchestrator:
             )
 
         proposed_relaxations = self.patient_agent.propose_relaxations(
+            routing=payload.routing_decision,
             blocker_summary=allocation.blocker_summary,
             preferences=payload.preferences,
             applied_relaxations=run.relaxation_history,

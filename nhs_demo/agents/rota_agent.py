@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple
 
-from nhs_demo.config import SLOT_DATABASE_HORIZON_DAYS, SYNTHETIC_BASE_DATETIME
+from nhs_demo.config import SLOT_DATABASE_HORIZON_DAYS
 from nhs_demo.schemas import RoutingDecision, Slot
 
 
@@ -20,18 +20,21 @@ class _SlotTemplate:
 
 
 class RotaAgent:
-    """Serve slots from a pre-built deterministic in-memory slot database."""
+    """Serve slots from a live in-memory slot database anchored to the current date."""
 
     HOSPITAL_NAME = "Leeds General Infirmary"
 
     def __init__(
         self,
-        base_datetime: datetime = SYNTHETIC_BASE_DATETIME,
+        base_datetime: datetime | None = None,
         database_horizon_days: int = SLOT_DATABASE_HORIZON_DAYS,
+        now_provider: Callable[[], datetime] | None = None,
     ) -> None:
-        self.base_datetime = base_datetime
+        self._now_provider = now_provider or datetime.now
+        self.base_datetime = (base_datetime or self._live_base_datetime()).replace(tzinfo=None)
         self.database_horizon_days = max(1, database_horizon_days)
         self._database_build_count = 0
+        self._database_anchor_date = self.base_datetime.date()
         self._slot_database = self._build_slot_database()
 
     @property
@@ -43,9 +46,11 @@ class RotaAgent:
         service_type: str | None = None,
         horizon_days: int | None = None,
     ) -> Dict[str, List[_SlotTemplate]]:
+        self._refresh_slot_database_if_needed()
+        now = self._now()
         requested_horizon = self.database_horizon_days if horizon_days is None else horizon_days
         effective_horizon = max(1, min(requested_horizon, self.database_horizon_days))
-        horizon_end = self.base_datetime + timedelta(days=effective_horizon)
+        horizon_end = now + timedelta(days=effective_horizon)
 
         available_services = set(self._slot_database.keys())
         if service_type is not None and service_type not in available_services:
@@ -55,13 +60,17 @@ class RotaAgent:
         inventory: Dict[str, List[_SlotTemplate]] = {}
         for service in target_services:
             inventory[service] = [
-                slot for slot in self._slot_database[service] if slot.start_time < horizon_end
+                slot
+                for slot in self._slot_database[service]
+                if now <= slot.start_time < horizon_end
             ]
         return inventory
 
     def generate_slots(self, routing: RoutingDecision, horizon_days: int) -> List[Slot]:
+        self._refresh_slot_database_if_needed()
+        now = self._now()
         effective_horizon = max(1, min(horizon_days, self.database_horizon_days))
-        horizon_end = self.base_datetime + timedelta(days=effective_horizon)
+        horizon_end = now + timedelta(days=effective_horizon)
 
         service_templates = self._slot_database.get(routing.service_type, [])
         return [
@@ -75,7 +84,7 @@ class RotaAgent:
                 duration_minutes=routing.appointment_length_minutes,
             )
             for template in service_templates
-            if template.start_time < horizon_end
+            if now <= template.start_time < horizon_end
         ]
 
     def generate_scaled_slots(self, routing: RoutingDecision, total_slots: int) -> List[Slot]:
@@ -83,6 +92,8 @@ class RotaAgent:
         if total_slots <= 0:
             return []
 
+        self._refresh_slot_database_if_needed()
+        now = self._now()
         templates = self._templates_for_service(routing.service_type)
         if not templates:
             return []
@@ -99,6 +110,8 @@ class RotaAgent:
 
             for template_index, (hour, minute, modality, clinician_suffix) in enumerate(templates, start=1):
                 slot_start = day_start.replace(hour=hour, minute=minute)
+                if slot_start < now:
+                    continue
                 slot_number = len(slots) + 1
                 slots.append(
                     Slot(
@@ -158,6 +171,22 @@ class RotaAgent:
             database[service_type] = service_slots
 
         return database
+
+    def _refresh_slot_database_if_needed(self) -> None:
+        current_anchor = self._live_base_datetime()
+        if current_anchor.date() == self._database_anchor_date:
+            return
+        self.base_datetime = current_anchor
+        self._database_anchor_date = current_anchor.date()
+        self._slot_database = self._build_slot_database()
+
+    def _live_base_datetime(self) -> datetime:
+        current = self._now()
+        return current.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    def _now(self) -> datetime:
+        current = self._now_provider()
+        return current.replace(tzinfo=None)
 
     def _service_prefix(self, service_type: str) -> str:
         return service_type[:2].upper()

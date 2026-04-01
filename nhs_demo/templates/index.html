@@ -6,224 +6,300 @@
   <title>NHS-Style MAS Scheduling Demo</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
-<body>
+<body class="view-user">
   <header class="page-header">
-    <h1>NHS-Style Multi-Agent Scheduling Demo</h1>
-    <p>Synthetic data only. Technical demonstrator.</p>
+    <div class="header-copy">
+      <p id="pageEyebrow" class="eyebrow">Patient appointments</p>
+      <h1 id="pageTitle">NHS-Style Appointment Scheduler</h1>
+      <p id="pageSubtitle" class="header-text">
+        Send a short message or use the guided form. We’ll help find the best available slot.
+      </p>
+    </div>
+
+    <div class="header-actions">
+      <div class="view-toggle" role="tablist" aria-label="Page view">
+        <button id="userViewToggle" class="toggle-button active" type="button">User View</button>
+        <button id="adminViewToggle" class="toggle-button" type="button">Admin View</button>
+      </div>
+
+      <div class="run-actions">
+        <p id="runIdView" class="run-pill">Run ID: not started</p>
+        <button id="btnReset" class="button-link secondary-button" type="button">New Request</button>
+      </div>
+    </div>
   </header>
 
-  <main class="chat-layout">
-    <section class="chat-card">
-      <div id="chatThread" class="chat-thread"></div>
-
-      <div class="composer">
-        <div class="row">
-          <label for="captureMode">Interface</label>
-          <select id="captureMode">
-            <option value="conversation" selected>Conversational</option>
-            <option value="form">Form-based</option>
-          </select>
-        </div>
-
-        <div class="row">
-          <label class="mode-toggle" for="humanModeToggle">
-            <input id="humanModeToggle" type="checkbox" />
-            Human conversation mode (hide parsing details)
-          </label>
-        </div>
-
-        <div id="conversationInputs">
-          <label for="userText">Your message</label>
-          <textarea id="userText" rows="4" placeholder="Example: persistent cough for 2 weeks, no Monday mornings, phone preferred"></textarea>
-        </div>
-
-        <div id="formInputs" style="display:none;">
-          <label for="formReasonCode">Reason</label>
-          <select id="formReasonCode">
-            <option value="repeat_prescription">Repeat prescription</option>
-            <option value="blood_test">Blood test</option>
-            <option value="persistent_cough">Persistent cough</option>
-            <option value="uti_symptoms">UTI symptoms</option>
-            <option value="sore_throat">Sore throat</option>
-            <option value="admin_request">Admin request</option>
-            <option value="general_review">General review</option>
-          </select>
-
-          <div class="row">
-            <label for="formPreferredModality">Preferred modality</label>
-            <select id="formPreferredModality">
-              <option value="">No preference</option>
-              <option value="in_person">In person</option>
-              <option value="phone">Phone</option>
-              <option value="video">Video</option>
-            </select>
+  <main class="workspace">
+    <section class="experience-grid">
+      <section class="chat-card card">
+        <div class="chat-header">
+          <div>
+            <p class="section-kicker">Booking Assistant</p>
+            <h2>Book an appointment</h2>
+            <p>Tell the assistant what you need and it will help find the best available appointment.</p>
           </div>
 
-          <fieldset>
-            <legend>Hard constraints: modalities you cannot do</legend>
-            <div class="checkbox-grid">
-              <label class="checkbox-item"><input type="checkbox" id="hard-modality-in_person" />In person</label>
-              <label class="checkbox-item"><input type="checkbox" id="hard-modality-phone" />Phone</label>
-              <label class="checkbox-item"><input type="checkbox" id="hard-modality-video" />Video</label>
-            </div>
-          </fieldset>
-
-          <fieldset>
-            <legend>Day + time preferences and hard constraints</legend>
-            <div class="day-time-grid">
-              <div class="day-time-head">Day</div>
-              <div class="day-time-head">Preferred day</div>
-              <div class="day-time-head">Hard block day</div>
-              <div class="day-time-head">Preferred times</div>
-              <div class="day-time-head">Hard blocked times</div>
-
-              <div class="day-time-day">Mon</div>
-              <div><input type="checkbox" id="pref-day-Mon" /></div>
-              <div><input type="checkbox" id="hard-day-Mon" /></div>
-              <div class="day-time-periods">
-                <label><input type="checkbox" id="pref-slot-Mon-morning" />Morning</label>
-                <label><input type="checkbox" id="pref-slot-Mon-afternoon" />Afternoon</label>
-                <label><input type="checkbox" id="pref-slot-Mon-evening" />Evening</label>
-              </div>
-              <div class="day-time-periods">
-                <label><input type="checkbox" id="hard-slot-Mon-morning" />Morning</label>
-                <label><input type="checkbox" id="hard-slot-Mon-afternoon" />Afternoon</label>
-                <label><input type="checkbox" id="hard-slot-Mon-evening" />Evening</label>
-              </div>
-
-              <div class="day-time-day">Tue</div>
-              <div><input type="checkbox" id="pref-day-Tue" /></div>
-              <div><input type="checkbox" id="hard-day-Tue" /></div>
-              <div class="day-time-periods">
-                <label><input type="checkbox" id="pref-slot-Tue-morning" />Morning</label>
-                <label><input type="checkbox" id="pref-slot-Tue-afternoon" />Afternoon</label>
-                <label><input type="checkbox" id="pref-slot-Tue-evening" />Evening</label>
-              </div>
-              <div class="day-time-periods">
-                <label><input type="checkbox" id="hard-slot-Tue-morning" />Morning</label>
-                <label><input type="checkbox" id="hard-slot-Tue-afternoon" />Afternoon</label>
-                <label><input type="checkbox" id="hard-slot-Tue-evening" />Evening</label>
-              </div>
-
-              <div class="day-time-day">Wed</div>
-              <div><input type="checkbox" id="pref-day-Wed" /></div>
-              <div><input type="checkbox" id="hard-day-Wed" /></div>
-              <div class="day-time-periods">
-                <label><input type="checkbox" id="pref-slot-Wed-morning" />Morning</label>
-                <label><input type="checkbox" id="pref-slot-Wed-afternoon" />Afternoon</label>
-                <label><input type="checkbox" id="pref-slot-Wed-evening" />Evening</label>
-              </div>
-              <div class="day-time-periods">
-                <label><input type="checkbox" id="hard-slot-Wed-morning" />Morning</label>
-                <label><input type="checkbox" id="hard-slot-Wed-afternoon" />Afternoon</label>
-                <label><input type="checkbox" id="hard-slot-Wed-evening" />Evening</label>
-              </div>
-
-              <div class="day-time-day">Thu</div>
-              <div><input type="checkbox" id="pref-day-Thu" /></div>
-              <div><input type="checkbox" id="hard-day-Thu" /></div>
-              <div class="day-time-periods">
-                <label><input type="checkbox" id="pref-slot-Thu-morning" />Morning</label>
-                <label><input type="checkbox" id="pref-slot-Thu-afternoon" />Afternoon</label>
-                <label><input type="checkbox" id="pref-slot-Thu-evening" />Evening</label>
-              </div>
-              <div class="day-time-periods">
-                <label><input type="checkbox" id="hard-slot-Thu-morning" />Morning</label>
-                <label><input type="checkbox" id="hard-slot-Thu-afternoon" />Afternoon</label>
-                <label><input type="checkbox" id="hard-slot-Thu-evening" />Evening</label>
-              </div>
-
-              <div class="day-time-day">Fri</div>
-              <div><input type="checkbox" id="pref-day-Fri" /></div>
-              <div><input type="checkbox" id="hard-day-Fri" /></div>
-              <div class="day-time-periods">
-                <label><input type="checkbox" id="pref-slot-Fri-morning" />Morning</label>
-                <label><input type="checkbox" id="pref-slot-Fri-afternoon" />Afternoon</label>
-                <label><input type="checkbox" id="pref-slot-Fri-evening" />Evening</label>
-              </div>
-              <div class="day-time-periods">
-                <label><input type="checkbox" id="hard-slot-Fri-morning" />Morning</label>
-                <label><input type="checkbox" id="hard-slot-Fri-afternoon" />Afternoon</label>
-                <label><input type="checkbox" id="hard-slot-Fri-evening" />Evening</label>
-              </div>
-            </div>
-          </fieldset>
-
-          <div class="row slider-row">
-            <div class="slider-field">
-              <label for="formHorizon">
-                How many days ahead should we search?
-                <span id="formHorizonValue" class="slider-value">10 days</span>
-              </label>
-              <div class="slider-input-wrap">
-                <input id="formHorizon" type="range" min="1" max="30" step="1" value="10" list="horizonTicks" />
-                <span id="formHorizonThumbValue" class="slider-thumb-value">10</span>
-              </div>
-              <datalist id="horizonTicks">
-                <option value="1"></option>
-                <option value="7"></option>
-                <option value="14"></option>
-                <option value="21"></option>
-                <option value="30"></option>
-              </datalist>
-              <p class="hint slider-hint">Lower means a tighter search window. Higher checks further ahead.</p>
-            </div>
-
-            <div class="slider-field">
-              <label for="formSoonestWeight">
-                How important is getting the soonest appointment?
-                <span id="formSoonestWeightValue" class="slider-value">100</span>
-              </label>
-              <div class="slider-input-wrap">
-                <input id="formSoonestWeight" type="range" min="0" max="100" step="1" value="100" list="soonestTicks" />
-                <span id="formSoonestWeightThumbValue" class="slider-thumb-value">100</span>
-              </div>
-              <datalist id="soonestTicks">
-                <option value="0"></option>
-                <option value="25"></option>
-                <option value="50"></option>
-                <option value="75"></option>
-                <option value="100"></option>
-              </datalist>
-              <p class="hint slider-hint">0 ignores soonness. 100 strongly prioritises earliest slots.</p>
-            </div>
+          <div class="capture-switch" role="tablist" aria-label="Request input mode">
+            <button id="captureModeConversation" class="capture-button active" type="button">Chat</button>
+            <button id="captureModeForm" class="capture-button" type="button">Guided Form</button>
           </div>
-          <p class="hint">Hard blocks always win. Day+time preferences feed slot scoring in a more precise way than global day/period picks.</p>
-
         </div>
 
+        <section class="user-status-panel">
+          <div class="status-copy">
+            <p class="section-kicker">Assistant Status</p>
+            <h3 id="userStatusHeading">Start your request</h3>
+            <p id="userStatusBody">
+              Tell us what you need in plain language, or switch to the guided form if you prefer step-by-step help.
+            </p>
+          </div>
+
+          <div id="userSummaryContent" class="status-summary" hidden>
+            <div class="status-summary-row">
+              <div class="status-summary-item">
+                <span class="summary-label">Reason</span>
+                <strong id="userReasonSummary">Not captured yet</strong>
+              </div>
+              <div class="status-summary-item">
+                <span class="summary-label">Appointment type</span>
+                <strong id="userServiceSummary">Waiting for triage</strong>
+              </div>
+            </div>
+            <p id="userSearchSummary" class="status-summary-text">No preferences captured yet</p>
+            <div id="userPreferenceChips" class="chip-list"></div>
+          </div>
+
+          <div id="userBookingState" class="booking-state empty-state" hidden>
+            Your appointment details will appear here once availability has been checked.
+          </div>
+        </section>
+
+        <div id="chatThread" class="chat-thread"></div>
+
+        <div class="composer">
+          <div class="admin-inline-controls">
+            <div class="row">
+              <label id="captureModeLabel" for="captureMode">Interface</label>
+              <select id="captureMode">
+                <option value="conversation" selected>Conversational</option>
+                <option value="form">Form-based</option>
+              </select>
+            </div>
+
+            <div class="row">
+              <label class="mode-toggle" for="humanModeToggle">
+                <input id="humanModeToggle" type="checkbox" />
+                <span id="humanModeToggleLabel">Human conversation mode (hide parsing details)</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="conversationInputs" class="input-panel">
+            <label id="userTextLabel" for="userText">What do you need help with?</label>
+            <textarea
+              id="userText"
+              rows="5"
+              placeholder="Example: I have had a persistent cough for 2 weeks, phone is easiest, and Monday mornings do not work for me."
+            ></textarea>
+            <p id="conversationHint" class="hint">Include symptoms, how long it has been going on, and any timing preferences that matter.</p>
+          </div>
+
+          <div id="formInputs" class="input-panel" style="display:none;">
+            <div class="form-grid">
+              <section class="form-card">
+                <p class="form-card-title">Reason for appointment</p>
+                <label id="formReasonLabel" for="formReasonCode">What do you need?</label>
+                <select id="formReasonCode">
+                  <option value="repeat_prescription">Repeat prescription</option>
+                  <option value="blood_test">Blood test</option>
+                  <option value="persistent_cough">Persistent cough</option>
+                  <option value="uti_symptoms">UTI symptoms</option>
+                  <option value="sore_throat">Sore throat</option>
+                  <option value="admin_request">Admin request</option>
+                  <option value="general_review">General review</option>
+                </select>
+
+                <label id="formPreferredModalityLabel" for="formPreferredModality">Preferred appointment type</label>
+                <select id="formPreferredModality">
+                  <option value="">No preference</option>
+                  <option value="in_person">In person</option>
+                  <option value="phone">Phone</option>
+                  <option value="video">Video</option>
+                </select>
+
+                <fieldset>
+                  <legend id="modalityLegend">Appointment types that will not work</legend>
+                  <div class="checkbox-grid">
+                    <label class="checkbox-item"><input type="checkbox" id="hard-modality-in_person" />In person</label>
+                    <label class="checkbox-item"><input type="checkbox" id="hard-modality-phone" />Phone</label>
+                    <label class="checkbox-item"><input type="checkbox" id="hard-modality-video" />Video</label>
+                  </div>
+                </fieldset>
+              </section>
+
+              <section class="form-card form-card-wide">
+                <p class="form-card-title">Availability</p>
+                <fieldset>
+                  <legend id="availabilityLegend">Choose the days and times you prefer, and anything that must be avoided</legend>
+                  <div class="day-time-grid">
+                    <div class="day-time-head">Day</div>
+                    <div class="day-time-head">Best day</div>
+                    <div class="day-time-head">Cannot do day</div>
+                    <div class="day-time-head">Preferred times</div>
+                    <div class="day-time-head">Blocked times</div>
+
+                    <div class="day-time-day">Mon</div>
+                    <div><input type="checkbox" id="pref-day-Mon" /></div>
+                    <div><input type="checkbox" id="hard-day-Mon" /></div>
+                    <div class="day-time-periods">
+                      <label><input type="checkbox" id="pref-slot-Mon-morning" />Morning</label>
+                      <label><input type="checkbox" id="pref-slot-Mon-afternoon" />Afternoon</label>
+                      <label><input type="checkbox" id="pref-slot-Mon-evening" />Evening</label>
+                    </div>
+                    <div class="day-time-periods">
+                      <label><input type="checkbox" id="hard-slot-Mon-morning" />Morning</label>
+                      <label><input type="checkbox" id="hard-slot-Mon-afternoon" />Afternoon</label>
+                      <label><input type="checkbox" id="hard-slot-Mon-evening" />Evening</label>
+                    </div>
+
+                    <div class="day-time-day">Tue</div>
+                    <div><input type="checkbox" id="pref-day-Tue" /></div>
+                    <div><input type="checkbox" id="hard-day-Tue" /></div>
+                    <div class="day-time-periods">
+                      <label><input type="checkbox" id="pref-slot-Tue-morning" />Morning</label>
+                      <label><input type="checkbox" id="pref-slot-Tue-afternoon" />Afternoon</label>
+                      <label><input type="checkbox" id="pref-slot-Tue-evening" />Evening</label>
+                    </div>
+                    <div class="day-time-periods">
+                      <label><input type="checkbox" id="hard-slot-Tue-morning" />Morning</label>
+                      <label><input type="checkbox" id="hard-slot-Tue-afternoon" />Afternoon</label>
+                      <label><input type="checkbox" id="hard-slot-Tue-evening" />Evening</label>
+                    </div>
+
+                    <div class="day-time-day">Wed</div>
+                    <div><input type="checkbox" id="pref-day-Wed" /></div>
+                    <div><input type="checkbox" id="hard-day-Wed" /></div>
+                    <div class="day-time-periods">
+                      <label><input type="checkbox" id="pref-slot-Wed-morning" />Morning</label>
+                      <label><input type="checkbox" id="pref-slot-Wed-afternoon" />Afternoon</label>
+                      <label><input type="checkbox" id="pref-slot-Wed-evening" />Evening</label>
+                    </div>
+                    <div class="day-time-periods">
+                      <label><input type="checkbox" id="hard-slot-Wed-morning" />Morning</label>
+                      <label><input type="checkbox" id="hard-slot-Wed-afternoon" />Afternoon</label>
+                      <label><input type="checkbox" id="hard-slot-Wed-evening" />Evening</label>
+                    </div>
+
+                    <div class="day-time-day">Thu</div>
+                    <div><input type="checkbox" id="pref-day-Thu" /></div>
+                    <div><input type="checkbox" id="hard-day-Thu" /></div>
+                    <div class="day-time-periods">
+                      <label><input type="checkbox" id="pref-slot-Thu-morning" />Morning</label>
+                      <label><input type="checkbox" id="pref-slot-Thu-afternoon" />Afternoon</label>
+                      <label><input type="checkbox" id="pref-slot-Thu-evening" />Evening</label>
+                    </div>
+                    <div class="day-time-periods">
+                      <label><input type="checkbox" id="hard-slot-Thu-morning" />Morning</label>
+                      <label><input type="checkbox" id="hard-slot-Thu-afternoon" />Afternoon</label>
+                      <label><input type="checkbox" id="hard-slot-Thu-evening" />Evening</label>
+                    </div>
+
+                    <div class="day-time-day">Fri</div>
+                    <div><input type="checkbox" id="pref-day-Fri" /></div>
+                    <div><input type="checkbox" id="hard-day-Fri" /></div>
+                    <div class="day-time-periods">
+                      <label><input type="checkbox" id="pref-slot-Fri-morning" />Morning</label>
+                      <label><input type="checkbox" id="pref-slot-Fri-afternoon" />Afternoon</label>
+                      <label><input type="checkbox" id="pref-slot-Fri-evening" />Evening</label>
+                    </div>
+                    <div class="day-time-periods">
+                      <label><input type="checkbox" id="hard-slot-Fri-morning" />Morning</label>
+                      <label><input type="checkbox" id="hard-slot-Fri-afternoon" />Afternoon</label>
+                      <label><input type="checkbox" id="hard-slot-Fri-evening" />Evening</label>
+                    </div>
+                  </div>
+                </fieldset>
+              </section>
+
+              <section class="form-card form-card-wide">
+                <p class="form-card-title">Search settings</p>
+                <div class="row slider-row">
+                  <div class="slider-field">
+                    <label id="formHorizonLabel" for="formHorizon">
+                      How far ahead should we look?
+                      <span id="formHorizonValue" class="slider-value">10 days</span>
+                    </label>
+                    <div class="slider-input-wrap">
+                      <input id="formHorizon" type="range" min="1" max="30" step="1" value="10" list="horizonTicks" />
+                      <span id="formHorizonThumbValue" class="slider-thumb-value">10</span>
+                    </div>
+                    <datalist id="horizonTicks">
+                      <option value="1"></option>
+                      <option value="7"></option>
+                      <option value="14"></option>
+                      <option value="21"></option>
+                      <option value="30"></option>
+                    </datalist>
+                    <p id="formHorizonHint" class="hint slider-hint">A wider search window checks more appointments.</p>
+                  </div>
+
+                  <div class="slider-field">
+                    <label id="formSoonestWeightLabel" for="formSoonestWeight">
+                      How important is the earliest slot?
+                      <span id="formSoonestWeightValue" class="slider-value">100</span>
+                    </label>
+                    <div class="slider-input-wrap">
+                      <input id="formSoonestWeight" type="range" min="0" max="100" step="1" value="100" list="soonestTicks" />
+                      <span id="formSoonestWeightThumbValue" class="slider-thumb-value">100</span>
+                    </div>
+                    <datalist id="soonestTicks">
+                      <option value="0"></option>
+                      <option value="25"></option>
+                      <option value="50"></option>
+                      <option value="75"></option>
+                      <option value="100"></option>
+                    </datalist>
+                    <p id="formSoonestWeightHint" class="hint slider-hint">Higher values push the search toward the soonest feasible slot.</p>
+                  </div>
+                </div>
+                <p id="formGlobalHint" class="hint">Hard blocks always win over preferences.</p>
+              </section>
+            </div>
+          </div>
+
+          <div class="actions composer-actions">
+            <button id="btnIntake" type="button">Find Appointment</button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="side-card admin-panel">
+        <h2>Admin Panel</h2>
+        <p id="adminRunIdView">Run ID: not started</p>
         <div class="actions">
-          <button id="btnIntake">Submit Intake</button>
+          <a id="auditPageLink" class="button-link disabled" href="#">Open Audit Page</a>
+          <a id="auditJsonLink" class="button-link disabled" href="#">Download Audit JSON</a>
         </div>
-      </div>
+        <h3>State</h3>
+        <pre id="stateSummary">No run yet.</pre>
+        <h3>Intake</h3>
+        <pre id="adminIntake">No intake response yet.</pre>
+        <h3>Route</h3>
+        <pre id="adminRoute">No route response yet.</pre>
+        <h3>Scheduling</h3>
+        <pre id="adminScheduling">No scheduling responses yet.</pre>
+        <details class="admin-toggle">
+          <summary>Rota Timetable (Shared DB)</summary>
+          <pre id="adminRotaTimetable">Loading timetable...</pre>
+        </details>
+        <details class="admin-toggle">
+          <summary>Slot Scores (Latest Round)</summary>
+          <pre id="adminSlotScores">No slot scoring yet.</pre>
+        </details>
+        <h3>Relaxation Trail</h3>
+        <pre id="adminRelaxTrail">No relaxations yet.</pre>
+      </aside>
     </section>
-
-    <aside class="side-card">
-      <h2>Admin Panel</h2>
-      <p id="runIdView">Run ID: not started</p>
-      <div class="actions">
-        <a id="auditPageLink" class="button-link disabled" href="#">Open Audit Page</a>
-        <a id="auditJsonLink" class="button-link disabled" href="#">Download Audit JSON</a>
-      </div>
-      <h3>State</h3>
-      <pre id="stateSummary">No run yet.</pre>
-      <h3>Intake</h3>
-      <pre id="adminIntake">No intake response yet.</pre>
-      <h3>Route</h3>
-      <pre id="adminRoute">No route response yet.</pre>
-      <h3>Scheduling</h3>
-      <pre id="adminScheduling">No scheduling responses yet.</pre>
-      <details class="admin-toggle">
-        <summary>Rota Timetable (Shared DB)</summary>
-        <pre id="adminRotaTimetable">Loading timetable...</pre>
-      </details>
-      <details class="admin-toggle">
-        <summary>Slot Scores (Latest Round)</summary>
-        <pre id="adminSlotScores">No slot scoring yet.</pre>
-      </details>
-      <h3>Relaxation Trail</h3>
-      <pre id="adminRelaxTrail">No relaxations yet.</pre>
-    </aside>
   </main>
 
   <script src="/static/app.js"></script>
